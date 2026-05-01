@@ -4,15 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
-import {
-  achievementKeyToLabel,
-  buildReachedAchievementKeys,
-  isAchievementKey,
-  type AchievementKey,
-} from "@/lib/achievements";
 import type { Species, SpeciesCategory } from "@/lib/types";
-import AchievementDetailModal from "@/components/AchievementDetailModal";
-import AchievementsPanel, { type TrophyItem } from "@/components/AchievementsPanel";
 
 type SpeciesCard = Pick<
   Species,
@@ -22,12 +14,6 @@ type SpeciesCard = Pick<
 type SightingSpeciesRef = {
   species_id: string | null;
   seen_at: string;
-};
-
-type AchievementRow = {
-  achievement_key: string;
-  achievement_label: string;
-  unlocked_at: string;
 };
 
 type CategoryFilter = "all" | SpeciesCategory;
@@ -69,8 +55,6 @@ export default function CollectionPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
-  const [trophies, setTrophies] = useState<TrophyItem[]>([]);
-  const [activeTrophy, setActiveTrophy] = useState<TrophyItem | null>(null);
 
   useEffect(() => {
     const loadCollection = async () => {
@@ -83,7 +67,6 @@ export default function CollectionPage() {
         setSpecies([]);
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
-        setTrophies([]);
         setLoading(false);
 
         return;
@@ -104,7 +87,6 @@ export default function CollectionPage() {
         setSpecies([]);
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
-        setTrophies([]);
         setLoading(false);
 
         return;
@@ -120,7 +102,6 @@ export default function CollectionPage() {
       if (!user) {
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
-        setTrophies([]);
         setLoading(false);
 
         return;
@@ -135,7 +116,6 @@ export default function CollectionPage() {
         setMessage("No pudimos cargar tus avistamientos por ahora.");
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
-        setTrophies([]);
         setLoading(false);
 
         return;
@@ -171,76 +151,6 @@ export default function CollectionPage() {
       setDiscoveredSpeciesIds(discoveredIds);
       setRecentSpeciesIds(recentIds);
 
-      const discoveredCategories = Array.from(
-        new Set(
-          loadedSpecies
-            .filter((item) => discoveredIds.includes(item.id))
-            .map((item) => item.category)
-            .filter((category): category is SpeciesCategory =>
-              ["mammal", "bird", "reptile", "amphibian", "insect", "fish", "other"].includes(
-                category,
-              ),
-            ),
-        ),
-      );
-
-      const reachedAchievementKeys = buildReachedAchievementKeys({
-        distinctSpeciesCount: discoveredIds.length,
-        discoveredCategories,
-      });
-
-      const { data: achievementData, error: achievementError } = await supabase
-        .from("user_achievements")
-        .select("achievement_key, achievement_label, unlocked_at")
-        .eq("user_id", user.id)
-        .order("unlocked_at", { ascending: false });
-
-      let mergedAchievements = (achievementData ?? []) as AchievementRow[];
-
-      if (!achievementError && reachedAchievementKeys.length > 0) {
-        const existingKeySet = new Set(mergedAchievements.map((item) => item.achievement_key));
-        const missingKeys = reachedAchievementKeys.filter((key) => !existingKeySet.has(key));
-
-        if (missingKeys.length > 0) {
-          await supabase.from("user_achievements").upsert(
-            missingKeys.map((key) => ({
-              user_id: user.id,
-              achievement_key: key,
-              achievement_label: achievementKeyToLabel(key),
-              source: "collection_sync",
-            })),
-            { onConflict: "user_id,achievement_key", ignoreDuplicates: true },
-          );
-
-          mergedAchievements = [
-            ...mergedAchievements,
-            ...missingKeys.map((key) => ({
-              achievement_key: key,
-              achievement_label: achievementKeyToLabel(key),
-              unlocked_at: new Date().toISOString(),
-            })),
-          ];
-        }
-      }
-
-      const validAchievements = mergedAchievements.filter(
-        (item): item is AchievementRow & { achievement_key: AchievementKey } =>
-          isAchievementKey(item.achievement_key),
-      );
-
-      const uniqueAchievements = Array.from(
-        new Map(
-          validAchievements.map((item) => [item.achievement_key, item]),
-        ).values(),
-      ).sort((a, b) => new Date(b.unlocked_at).getTime() - new Date(a.unlocked_at).getTime());
-
-      setTrophies(
-        uniqueAchievements.map((item) => ({
-          achievementKey: item.achievement_key,
-          achievementLabel: item.achievement_label,
-          unlockedAt: item.unlocked_at,
-        })),
-      );
       setLoading(false);
     };
 
@@ -362,7 +272,18 @@ export default function CollectionPage() {
               ) : null}
             </div>
 
-            <AchievementsPanel trophies={trophies} onOpenDetail={setActiveTrophy} />
+            <Link
+              href="/trophies"
+              className="flex items-center justify-between rounded-2xl border border-[#d8e0ce] bg-white p-4 transition hover:bg-[#f2f6ed]"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#5b7464]">Trofeos</p>
+                <p className="mt-1 text-sm text-[#4f6256]">
+                  {user ? "Ver mis logros desbloqueados" : "Entra para ver tus trofeos"}
+                </p>
+              </div>
+              <span className="text-xl">🏆</span>
+            </Link>
           </div>
         </header>
 
@@ -502,12 +423,6 @@ export default function CollectionPage() {
         Capturar nuevo descubrimiento
       </Link>
 
-      <AchievementDetailModal
-        isOpen={Boolean(activeTrophy)}
-        achievementKey={activeTrophy?.achievementKey ?? null}
-        unlockedAt={activeTrophy?.unlockedAt ?? null}
-        onClose={() => setActiveTrophy(null)}
-      />
     </main>
   );
 }
