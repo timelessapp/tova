@@ -1,12 +1,11 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,8 +18,9 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      const nextPath = searchParams.get("next") || "/collection";
-      const code = searchParams.get("code");
+      const params = new URLSearchParams(window.location.search);
+      const nextPath = params.get("next") || "/collection";
+      const code = params.get("code");
 
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -48,7 +48,7 @@ export default function AuthCallbackPage() {
     };
 
     finishSession();
-  }, [router, searchParams]);
+  }, [router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f7f6ef] px-5 py-6 text-[#243128] sm:px-8">
