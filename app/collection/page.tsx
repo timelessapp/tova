@@ -47,6 +47,7 @@ const categoryLabelMap: Record<SpeciesCategory, string> = {
 const speciesSelectFields = "id, common_name, scientific_name, category, image_url";
 
 export default function CollectionPage() {
+  const UNDISCOVERED_PAGE_SIZE = 20;
   const { user, loading: authLoading } = useCurrentUser();
   const [loading, setLoading] = useState(true);
   const [species, setSpecies] = useState<SpeciesCard[]>([]);
@@ -55,6 +56,7 @@ export default function CollectionPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
+  const [undiscoveredVisibleCount, setUndiscoveredVisibleCount] = useState(UNDISCOVERED_PAGE_SIZE);
 
   useEffect(() => {
     const loadCollection = async () => {
@@ -210,6 +212,15 @@ export default function CollectionPage() {
 
     return undiscoveredSpecies.filter((item) => item.category === selectedCategory);
   }, [selectedCategory, undiscoveredSpecies]);
+
+  useEffect(() => {
+    setUndiscoveredVisibleCount(UNDISCOVERED_PAGE_SIZE);
+  }, [selectedCategory]);
+
+  const visibleUndiscoveredSpecies = useMemo(
+    () => filteredUndiscoveredSpecies.slice(0, undiscoveredVisibleCount),
+    [filteredUndiscoveredSpecies, undiscoveredVisibleCount],
+  );
 
   const displayedTotal =
     filteredRecentSpecies.length +
@@ -368,7 +379,7 @@ export default function CollectionPage() {
           </h2>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {filteredUndiscoveredSpecies.map((speciesItem) => {
+            {visibleUndiscoveredSpecies.map((speciesItem) => {
             const categoryLabel =
               categoryLabelMap[(speciesItem.category as SpeciesCategory) ?? "other"] ??
               "Otro";
@@ -400,6 +411,20 @@ export default function CollectionPage() {
             );
             })}
           </div>
+
+          {filteredUndiscoveredSpecies.length > visibleUndiscoveredSpecies.length ? (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setUndiscoveredVisibleCount((current) => current + UNDISCOVERED_PAGE_SIZE)
+                }
+                className="rounded-full border border-[#cfdac5] bg-[#f2f5ed] px-4 py-2 text-sm font-medium text-[#385443]"
+              >
+                Cargar 20 mas
+              </button>
+            </div>
+          ) : null}
         </section>
 
         {!loading && !message && displayedTotal === 0 ? (

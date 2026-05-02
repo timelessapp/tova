@@ -1,23 +1,105 @@
+"use client";
+
 import Link from "next/link";
-import { mockSpecies } from "@/lib/mockSpecies";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
-const mapPoints = mockSpecies
-  .filter((species) => species.discovered && species.locationName)
-  .map((species, index) => {
-    const positions = [
-      { top: "24%", left: "22%" },
-      { top: "44%", left: "55%" },
-      { top: "66%", left: "35%" },
-      { top: "54%", left: "74%" },
-    ];
+type MapSightingRow = {
+  id: string;
+  seen_at: string;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  species: { common_name: string; image_url: string | null } | null;
+};
 
-    return {
-      ...species,
-      ...positions[index % positions.length],
-    };
-  });
+const SightingsMap = dynamic(() => import("@/components/SightingsMap"), {
+  ssr: false,
+});
 
 export default function MapPage() {
+  const { user, loading: authLoading } = useCurrentUser();
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [sightings, setSightings] = useState<MapSightingRow[]>([]);
+
+  useEffect(() => {
+    const loadSightings = async () => {
+      const supabase = createSupabaseBrowserClient();
+
+      if (!supabase) {
+        setMessage("No encontramos la configuracion de Supabase.");
+        setSightings([]);
+        setLoading(false);
+
+        return;
+      }
+
+      if (!user) {
+        setSightings([]);
+        setLoading(false);
+
+        return;
+      }
+
+      setLoading(true);
+      setMessage(null);
+
+      const { data, error } = await supabase
+        .from("sightings")
+        .select("id, seen_at, location_name, latitude, longitude, species:species_id(common_name, image_url)")
+        .eq("user_id", user.id)
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        .order("seen_at", { ascending: false });
+
+      if (error) {
+        setMessage("No pudimos cargar tus avistamientos en el mapa.");
+        setSightings([]);
+        setLoading(false);
+
+        return;
+      }
+
+      setSightings((data ?? []) as MapSightingRow[]);
+      setLoading(false);
+    };
+
+    if (!authLoading) {
+      loadSightings();
+    }
+  }, [authLoading, user]);
+
+  const mapPoints = useMemo(
+    () =>
+      sightings
+        .filter(
+          (item) =>
+            typeof item.latitude === "number" &&
+            typeof item.longitude === "number",
+        )
+        .map((item) => ({
+          id: item.id,
+          latitude: item.latitude as number,
+          longitude: item.longitude as number,
+          seenAt: item.seen_at,
+          locationName: item.location_name,
+          commonName: item.species?.common_name ?? "Especie desconocida",
+          imageUrl: item.species?.image_url ?? null,
+        })),
+    [sightings],
+  );
+
+  const initialCenter = useMemo<[number, number]>(() => {
+    if (mapPoints.length > 0) {
+      return [mapPoints[0].latitude, mapPoints[0].longitude];
+    }
+
+    return [40.4168, -3.7038];
+  }, [mapPoints]);
+
   return (
     <main className="min-h-screen bg-[#f7f6ef] px-5 py-6 text-[#243128] sm:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -38,32 +120,37 @@ export default function MapPage() {
           </Link>
         </header>
 
-        <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-4 sm:p-6">
-          <div className="relative h-[460px] overflow-hidden rounded-2xl border border-[#cad7be] bg-gradient-to-b from-[#dbe8cd] via-[#ebf2df] to-[#f8f9f3]">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(160,186,143,0.35),transparent_35%),radial-gradient(circle_at_70%_55%,rgba(174,199,156,0.35),transparent_32%),radial-gradient(circle_at_55%_78%,rgba(190,209,172,0.3),transparent_28%)]" />
+        {loading ? (
+          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
+            <p className="text-sm text-[#55695d]">Cargando mapa...</p>
+          </section>
+        ) : null}
 
-            <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(to_right,#5f745f_1px,transparent_1px),linear-gradient(to_bottom,#5f745f_1px,transparent_1px)] [background-size:36px_36px]" />
+        {!loading && message ? (
+          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
+            <p className="text-sm text-[#55695d]">{message}</p>
+          </section>
+        ) : null}
 
-            {mapPoints.map((point) => (
-              <div
-                key={point.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ top: point.top, left: point.left }}
-              >
-                <div className="relative">
-                  <span className="absolute -inset-2 animate-ping rounded-full bg-[#52775e]/30" />
-                  <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#436a50] text-sm text-white shadow-sm">
-                    {point.imageEmoji}
-                  </span>
-                </div>
-                <div className="mt-2 min-w-36 rounded-xl border border-[#d4dfc9] bg-white/95 px-3 py-2 text-xs text-[#314338] shadow-sm">
-                  <p className="font-semibold">{point.commonName}</p>
-                  <p className="mt-0.5 text-[#607166]">{point.locationName}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {!loading && !user ? (
+          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
+            <p className="text-sm text-[#55695d]">Entra para ver tus avistamientos en el mapa.</p>
+          </section>
+        ) : null}
+
+        {!loading && user && mapPoints.length === 0 ? (
+          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
+            <p className="text-sm text-[#55695d]">Aun no tienes descubrimientos con ubicacion.</p>
+          </section>
+        ) : null}
+
+        {!loading && user && mapPoints.length > 0 ? (
+          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-3 sm:p-4">
+            <div className="h-[65vh] min-h-[360px] overflow-hidden rounded-2xl border border-[#cad7be]">
+              <SightingsMap points={mapPoints} initialCenter={initialCenter} />
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );

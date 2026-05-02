@@ -29,11 +29,6 @@ interface IdentifyApiResponse {
   error?: string;
 }
 
-const BARCELONA_COORDS = {
-  latitude: 41.3874,
-  longitude: 2.1686,
-};
-
 async function uploadSightingPhoto(
   supabase: ReturnType<typeof createSupabaseBrowserClient>,
   userId: string,
@@ -89,6 +84,12 @@ export default function CapturePage() {
   const [saved, setSaved] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<string>("");
+  const [capturedLocation, setCapturedLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [lastDiscoveryMode, setLastDiscoveryMode] = useState<"new" | "repeat" | null>(null);
   const suggestionsRef = useRef<HTMLElement | null>(null);
   const [discoveryModal, setDiscoveryModal] = useState<{
@@ -292,9 +293,9 @@ export default function CapturePage() {
       species_id: selectedSpecies.id,
       custom_name: selectedSpecies.common_name,
       photo_url: uploadedPhotoUrl,
-      location_name: "Barcelona",
-      latitude: BARCELONA_COORDS.latitude,
-      longitude: BARCELONA_COORDS.longitude,
+      location_name: capturedLocation ? "Ubicacion guardada" : null,
+      latitude: capturedLocation?.latitude ?? null,
+      longitude: capturedLocation?.longitude ?? null,
       seen_at: new Date().toISOString(),
       notes: "Guardado desde captura.",
     });
@@ -395,6 +396,39 @@ export default function CapturePage() {
       commonName: selectedSpecies.common_name,
       emoji: "🐾",
     });
+  };
+
+  const handleUseLocation = () => {
+    if (!("geolocation" in navigator)) {
+      setCapturedLocation(null);
+      setLocationMessage("Puedes guardar sin ubicacion.");
+
+      return;
+    }
+
+    setLocating(true);
+    setLocationMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCapturedLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocationMessage("Ubicacion anadida");
+        setLocating(false);
+      },
+      () => {
+        setCapturedLocation(null);
+        setLocationMessage("Puedes guardar sin ubicacion.");
+        setLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      },
+    );
   };
 
   return (
@@ -562,6 +596,21 @@ export default function CapturePage() {
             <p className="mt-1 text-sm italic text-[#5f7267]">
               {selectedSpecies.scientific_name ?? "Sin nombre cientifico"}
             </p>
+
+            <button
+              type="button"
+              onClick={handleUseLocation}
+              disabled={locating}
+              className="mt-4 w-full rounded-full border border-[#c6d5c2] bg-white px-5 py-3 text-sm font-semibold text-[#355442] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {locating ? "Obteniendo ubicacion..." : "Usar mi ubicacion"}
+            </button>
+
+            {locationMessage ? (
+              <p className="mt-3 rounded-xl border border-[#d8e0ce] bg-white px-3 py-2 text-sm text-[#4b5f53]">
+                {locationMessage}
+              </p>
+            ) : null}
 
             <button
               type="button"
