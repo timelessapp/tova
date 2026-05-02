@@ -44,14 +44,73 @@ const categoryLabelMap: Record<SpeciesCategory, string> = {
   other: "Otro",
 };
 
-const categoryLockedBg: Record<SpeciesCategory, string> = {
-  mammal: "bg-green-100",
-  bird: "bg-blue-100",
-  reptile: "bg-yellow-100",
-  amphibian: "bg-emerald-100",
-  insect: "bg-amber-100",
-  fish: "bg-cyan-100",
-  other: "bg-gray-100",
+type CategoryStyle = {
+  cardBorder: string;
+  badgeBg: string;
+  badgeText: string;
+  topTint: string;
+  placeholderBg: string;
+};
+
+const getCategoryStyle = (category: SpeciesCategory): CategoryStyle => {
+  switch (category) {
+    case "mammal":
+      return {
+        cardBorder: "border-[#c8b39a]",
+        badgeBg: "bg-[#eadfce]",
+        badgeText: "text-[#6f5239]",
+        topTint: "bg-gradient-to-b from-[#f0e6d8] to-[#f8f4ee]",
+        placeholderBg: "bg-[#e8dac7]",
+      };
+    case "bird":
+      return {
+        cardBorder: "border-[#b8ccdc]",
+        badgeBg: "bg-[#dcebf7]",
+        badgeText: "text-[#35566f]",
+        topTint: "bg-gradient-to-b from-[#e5f0fa] to-[#f6fafd]",
+        placeholderBg: "bg-[#d8e9f6]",
+      };
+    case "reptile":
+      return {
+        cardBorder: "border-[#c8c1a2]",
+        badgeBg: "bg-[#e8e2c8]",
+        badgeText: "text-[#5f5a3b]",
+        topTint: "bg-gradient-to-b from-[#ede8d3] to-[#f8f6ec]",
+        placeholderBg: "bg-[#e2dcbf]",
+      };
+    case "amphibian":
+      return {
+        cardBorder: "border-[#b8d1be]",
+        badgeBg: "bg-[#dceee0]",
+        badgeText: "text-[#315a40]",
+        topTint: "bg-gradient-to-b from-[#e2f1e6] to-[#f4faf5]",
+        placeholderBg: "bg-[#d4e7d9]",
+      };
+    case "insect":
+      return {
+        cardBorder: "border-[#d9c292]",
+        badgeBg: "bg-[#f2e3bf]",
+        badgeText: "text-[#72592c]",
+        topTint: "bg-gradient-to-b from-[#f5e8c9] to-[#fcf8ef]",
+        placeholderBg: "bg-[#ecd9ae]",
+      };
+    case "fish":
+      return {
+        cardBorder: "border-[#a7ced6]",
+        badgeBg: "bg-[#d5eef2]",
+        badgeText: "text-[#2f5e67]",
+        topTint: "bg-gradient-to-b from-[#ddf2f6] to-[#f4fbfc]",
+        placeholderBg: "bg-[#cce7ec]",
+      };
+    default:
+      return {
+        cardBorder: "border-[#cfd4d8]",
+        badgeBg: "bg-[#e8eaec]",
+        badgeText: "text-[#4f5962]",
+        topTint: "bg-gradient-to-b from-[#eceff1] to-[#f8f9fa]",
+        placeholderBg: "bg-[#dfe3e6]",
+      };
+  }
 };
 
 const categoryLockedIcon: Record<SpeciesCategory, string> = {
@@ -77,6 +136,7 @@ export default function CollectionPage() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
   const [undiscoveredVisibleCount, setUndiscoveredVisibleCount] = useState(UNDISCOVERED_PAGE_SIZE);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     const loadCollection = async () => {
@@ -242,23 +302,29 @@ export default function CollectionPage() {
     [filteredUndiscoveredSpecies, undiscoveredVisibleCount],
   );
 
+  const speciesNumberById = useMemo(() => {
+    return new Map(species.map((item, index) => [item.id, `#${String(index + 1).padStart(3, "0")}`]));
+  }, [species]);
+
   const displayedTotal =
     filteredRecentSpecies.length +
     filteredUnlockedCollectionSpecies.length +
     filteredUndiscoveredSpecies.length;
 
   const renderUnlockedCard = (speciesItem: SpeciesCard) => {
-    const categoryLabel =
-      categoryLabelMap[(speciesItem.category as SpeciesCategory) ?? "other"] ?? "Otro";
+    const category = (speciesItem.category as SpeciesCategory) ?? "other";
+    const categoryLabel = categoryLabelMap[category] ?? "Otro";
+    const categoryStyle = getCategoryStyle(category);
+    const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
 
     return (
       <Link
         key={speciesItem.id}
         href={`/species/${speciesItem.id}`}
-        className="flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-[#d6ddcb] bg-white transition hover:-translate-y-0.5 hover:shadow-sm"
+        className={`flex min-h-[18rem] flex-col overflow-hidden rounded-lg border bg-white transition hover:-translate-y-0.5 hover:shadow-sm ${categoryStyle.cardBorder}`}
       >
         <div className="p-3 pb-0">
-          <div className="overflow-hidden rounded-2xl border border-[#dfe6d8] bg-[#ebf1e4]">
+          <div className={`relative overflow-hidden rounded-md border border-black/5 ${categoryStyle.topTint}`}>
             <div className="aspect-[4/5] w-full">
               {speciesItem.image_url ? (
                 <img
@@ -267,7 +333,7 @@ export default function CollectionPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-5xl">
+                <div className={`flex h-full items-center justify-center text-5xl ${categoryStyle.placeholderBg}`}>
                   {"🐾"}
                 </div>
               )}
@@ -279,9 +345,14 @@ export default function CollectionPage() {
           <p className="mt-1 text-xs italic text-[#5c6f64]">
             {speciesItem.scientific_name ?? "Sin nombre cientifico"}
           </p>
-          <p className="mt-auto pt-3 text-xs font-medium uppercase tracking-wide text-[#597061]">
-            {categoryLabel}
-          </p>
+          <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+            <span
+              className={`inline-flex w-fit rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${categoryStyle.badgeBg} ${categoryStyle.badgeText}`}
+            >
+              {categoryLabel}
+            </span>
+            <span className="text-[10px] font-semibold tracking-wider text-[#607066]">{stickerNumber}</span>
+          </div>
         </div>
       </Link>
     );
@@ -291,58 +362,29 @@ export default function CollectionPage() {
     <main className="min-h-screen bg-[#f7f6ef] px-5 pb-28 pt-6 text-[#253028] sm:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header className="rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-5 sm:p-7">
-          <div className="grid gap-4 lg:grid-cols-[1fr_18rem] lg:items-start">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-[#5b7464]">TOVA</p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#223127]">Mi colección</h1>
-              <p className="mt-2 text-sm text-[#4f6256]">
-                Has descubierto {discoveredCount} de {species.length} animales.
-              </p>
-              {!authLoading && !user ? (
-                <p className="mt-2 text-xs text-[#5f7468]">Entra para empezar tu colección.</p>
-              ) : null}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#5b7464]">TOVA</p>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <h1 className="text-3xl font-semibold tracking-tight text-[#223127]">Mi colección</h1>
+              <Link
+                href="/trophies"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#c9d4bf] bg-white text-xl text-[#496053] transition hover:bg-[#edf2e7]"
+                aria-label="Ir a trofeos"
+                title="Ver trofeos"
+              >
+                🏆
+              </Link>
             </div>
-
-            <Link
-              href="/trophies"
-              className="flex items-center justify-between rounded-2xl border border-[#d8e0ce] bg-white p-4 transition hover:bg-[#f2f6ed]"
-            >
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-[#5b7464]">Trofeos</p>
-                <p className="mt-1 text-sm text-[#4f6256]">
-                  {user ? "Ver mis logros desbloqueados" : "Entra para ver tus trofeos"}
-                </p>
-              </div>
-              <span className="text-xl">🏆</span>
-            </Link>
+            <p className="mt-2 text-sm text-[#4f6256]">
+              Has descubierto {discoveredCount} de {species.length} animales.
+            </p>
+            {!authLoading && !user ? (
+              <p className="mt-2 text-xs text-[#5f7468]">Entra para empezar tu colección.</p>
+            ) : null}
           </div>
         </header>
 
-        <section className="rounded-2xl border border-[#d8e0ce] bg-[#fbfbf8] p-3 sm:p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#5f7468]">
-            Filtro por categoría
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map((option) => {
-              const isActive = selectedCategory === option.value;
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setSelectedCategory(option.value)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    isActive
-                      ? "border-[#3f684f] bg-[#3f684f] text-[#f7f6ef]"
-                      : "border-[#c9d4bf] bg-white text-[#496053] hover:bg-[#edf2e7]"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
 
         {loading ? (
           <section className="rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-6 text-center sm:p-8">
@@ -371,9 +413,48 @@ export default function CollectionPage() {
 
         {filteredRecentSpecies.length > 0 ? (
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#4f6458]">
-              Descubrimientos recientes
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-[#4f6458]">
+                Descubrimientos recientes
+              </h2>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filtersOpen || selectedCategory !== "all"
+                    ? "border-[#3f684f] bg-[#3f684f] text-[#f7f6ef]"
+                    : "border-[#c9d4bf] bg-white text-[#496053] hover:bg-[#edf2e7]"
+                }`}
+              >
+                <span>Filtros</span>
+                {selectedCategory !== "all" && (
+                  <span className="rounded-full bg-white/30 px-1.5 py-0.5 text-[10px]">
+                    {categoryOptions.find((o) => o.value === selectedCategory)?.label}
+                  </span>
+                )}
+              </button>
+            </div>
+            {filtersOpen && (
+              <div className="flex flex-wrap gap-2">
+                {categoryOptions.map((option) => {
+                  const isActive = selectedCategory === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setSelectedCategory(option.value)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        isActive
+                          ? "border-[#3f684f] bg-[#3f684f] text-[#f7f6ef]"
+                          : "border-[#c9d4bf] bg-white text-[#496053] hover:bg-[#edf2e7]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {filteredRecentSpecies.map(renderUnlockedCard)}
@@ -402,7 +483,8 @@ export default function CollectionPage() {
             {visibleUndiscoveredSpecies.map((speciesItem) => {
               const cat = (speciesItem.category as SpeciesCategory) ?? "other";
               const categoryLabel = categoryLabelMap[cat] ?? "Otro";
-              const lockedBg = categoryLockedBg[cat] ?? "bg-gray-100";
+              const categoryStyle = getCategoryStyle(cat);
+              const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
               const lockedIcon = categoryLockedIcon[cat] ?? "❓";
 
               return (
@@ -410,12 +492,12 @@ export default function CollectionPage() {
                   type="button"
                   key={speciesItem.id}
                   onClick={() => setLockedMessage("Todavía no has descubierto este animal")}
-                  className="flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-[#d6ddcb] bg-white text-left opacity-70 transition hover:-translate-y-0.5 hover:shadow-sm"
+                  className={`flex min-h-[18rem] flex-col overflow-hidden rounded-lg border bg-white/90 text-left opacity-85 transition hover:-translate-y-0.5 hover:shadow-sm ${categoryStyle.cardBorder}`}
                 >
                   <div className="p-3 pb-0">
-                    <div className={`overflow-hidden rounded-2xl ${lockedBg}`}>
-                      <div className="aspect-[4/5] w-full flex items-center justify-center">
-                        <span className="text-5xl">{lockedIcon}</span>
+                    <div className={`relative overflow-hidden rounded-md border border-black/5 ${categoryStyle.topTint}`}>
+                      <div className={`aspect-[4/5] w-full flex items-center justify-center ${categoryStyle.placeholderBg}`}>
+                        <span className="text-5xl opacity-60">{lockedIcon}</span>
                       </div>
                     </div>
                   </div>
@@ -424,9 +506,14 @@ export default function CollectionPage() {
                       {speciesItem.common_name}
                     </h3>
                     <p className="mt-1 text-xs text-[#5c6f64]">Por descubrir</p>
-                    <p className="mt-auto pt-3 text-xs font-medium uppercase tracking-wide text-[#597061]">
-                      {categoryLabel}
-                    </p>
+                    <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+                      <span
+                        className={`inline-flex w-fit rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${categoryStyle.badgeBg} ${categoryStyle.badgeText}`}
+                      >
+                        {categoryLabel}
+                      </span>
+                      <span className="text-[10px] font-semibold tracking-wider text-[#607066]">{stickerNumber}</span>
+                    </div>
                   </div>
                 </button>
               );
