@@ -423,9 +423,6 @@ export default function CollectionPage() {
                     <h3 className="text-sm font-semibold text-[#2b3b33]">
                       {speciesItem.common_name}
                     </h3>
-                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-[#8a968f]">
-                      No descubierto
-                    </p>
                     <p className="mt-1 text-xs text-[#5c6f64]">Por descubrir</p>
                     <p className="mt-auto pt-3 text-xs font-medium uppercase tracking-wide text-[#597061]">
                       {categoryLabel}
