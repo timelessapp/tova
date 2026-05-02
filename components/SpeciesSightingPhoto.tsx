@@ -67,22 +67,22 @@ export default function SpeciesSightingPhoto({ speciesId }: SpeciesSightingPhoto
 
   if (loading || loadingPhoto) {
     return (
-      <div className="mt-4 rounded-2xl border border-[#d8e1d0] bg-white p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
+      <div className="mt-4 rounded-2xl border border-sand-dark bg-white p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
           Tu ultimo avistamiento
         </p>
-        <p className="mt-2 text-sm text-[#5f7267]">Cargando foto...</p>
+        <p className="mt-2 text-sm text-forest-soft">Cargando foto...</p>
       </div>
     );
   }
 
   if (message) {
     return (
-      <div className="mt-4 rounded-2xl border border-[#d8e1d0] bg-white p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
+      <div className="mt-4 rounded-2xl border border-sand-dark bg-white p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
           Tu ultimo avistamiento
         </p>
-        <p className="mt-2 text-sm text-[#5f7267]">{message}</p>
+        <p className="mt-2 text-sm text-forest-soft">{message}</p>
       </div>
     );
   }
@@ -92,11 +92,11 @@ export default function SpeciesSightingPhoto({ speciesId }: SpeciesSightingPhoto
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-[#d8e1d0] bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
+    <div className="mt-4 rounded-2xl border border-sand-dark bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
         Tu ultimo avistamiento
       </p>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-[#dfe6d8] bg-[#eff3ea]">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-sand-dark bg-sand-dark">
         <div className="aspect-[4/5] w-full">
           <img
             src={photoUrl}

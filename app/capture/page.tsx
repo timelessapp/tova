@@ -432,7 +432,7 @@ export default function CapturePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f6ef] px-5 py-6 text-[#253028] sm:px-8">
+    <main className="min-h-screen bg-sand px-5 py-6 text-forest-dark sm:px-8">
       {discoveryModal ? (
         <DiscoveryModal
           mode={discoveryModal.mode}
@@ -450,13 +450,13 @@ export default function CapturePage() {
           <h1 className="text-3xl font-semibold tracking-tight">Captura</h1>
           <Link
             href="/collection"
-            className="rounded-full border border-[#ced8c5] bg-[#f5f7ef] px-3 py-1.5 text-xs font-medium text-[#3c5646]"
+            className="rounded-full border border-sand-dark bg-sand px-3 py-1.5 text-xs font-medium text-forest"
           >
             Mi colección
           </Link>
         </header>
 
-        <section className="rounded-3xl border border-[#d8e0ce] bg-white p-4 sm:p-6">
+        <section className="rounded-3xl border border-sand-dark bg-white p-4 sm:p-6">
           <div className="flex h-[320px] items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-[#c7d2bf] bg-gradient-to-b from-[#eff4e9] to-[#f7f8f2]">
             {photoDataUrl ? (
               <img src={photoDataUrl} alt="Preview del avistamiento" className="h-full w-full object-cover" />
@@ -472,7 +472,7 @@ export default function CapturePage() {
 
           <label
             htmlFor="sighting-photo"
-            className="mt-5 block text-xs font-semibold uppercase tracking-wide text-[#566c60]"
+            className="mt-5 block text-xs font-semibold uppercase tracking-wide text-forest-soft"
           >
             Foto del avistamiento
           </label>
@@ -481,43 +481,42 @@ export default function CapturePage() {
             name="sighting-photo"
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handleImageSelection}
-            className="mt-2 block w-full rounded-xl border border-[#cfd9c5] bg-white px-3 py-2 text-sm text-[#243128] file:mr-3 file:rounded-full file:border-0 file:bg-[#e8efe1] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#355442]"
+            className="mt-2 block w-full rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-dark file:mr-3 file:rounded-full file:border-0 file:bg-sand-dark file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-forest"
           />
-          {photoName ? <p className="mt-2 text-xs text-[#5f7267]">Foto seleccionada: {photoName}</p> : null}
+          {photoName ? <p className="mt-2 text-xs text-forest-soft">Foto seleccionada: {photoName}</p> : null}
 
           <button
             type="button"
             onClick={handleIdentify}
             disabled={identifyLoading || loadingSpecies || !photoDataUrl || speciesOptions.length === 0}
-            className="mt-5 w-full rounded-full bg-[#3f684f] px-5 py-3 text-sm font-semibold text-[#f7f6ef] transition-colors hover:bg-[#345641] disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-5 w-full rounded-full bg-forest px-5 py-3 text-sm font-semibold text-sand transition-colors hover:bg-forest-dark disabled:cursor-not-allowed disabled:opacity-70"
           >
             {identifyLoading ? "Analizando imagen..." : "Identificar animal"}
           </button>
 
           {speciesMessage ? (
-            <p className="mt-3 rounded-xl border border-[#d8e0ce] bg-[#fbfbf8] px-3 py-2 text-sm text-[#4b5f53]">
+            <p className="mt-3 rounded-xl border border-sand-dark bg-sand px-3 py-2 text-sm text-forest-soft">
               {speciesMessage}
             </p>
           ) : null}
 
           {identifyMessage ? (
-            <p className="mt-3 rounded-xl border border-[#d8e0ce] bg-[#fbfbf8] px-3 py-2 text-sm text-[#4b5f53]">
+            <p className="mt-3 rounded-xl border border-sand-dark bg-sand px-3 py-2 text-sm text-forest-soft">
               {identifyMessage}
             </p>
           ) : null}
         </section>
 
         {!loading && !user ? (
-          <p className="rounded-xl border border-[#d8e0ce] bg-[#fbfbf8] px-4 py-3 text-sm text-[#55695d]">
+          <p className="rounded-xl border border-sand-dark bg-sand px-4 py-3 text-sm text-forest-soft">
             Inicia sesion con magic link para poder guardar sightings.
           </p>
         ) : null}
 
         {suggestions.length > 0 ? (
-          <section ref={suggestionsRef} className="rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#5c7565]">
+          <section ref={suggestionsRef} className="rounded-3xl border border-sand-dark bg-sand p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
               Sugerencias IA
             </p>
 
@@ -536,12 +535,12 @@ export default function CapturePage() {
                     className={`rounded-2xl border px-4 py-3 ${
                       selected
                         ? "border-[#6f9279] bg-[#edf5ea]"
-                        : "border-[#d2dccf] bg-white"
+                        : "border-sand-dark bg-white"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#e8f0e1]">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-sand-dark">
                           {matchedSpecies?.image_url ? (
                             <img
                               src={matchedSpecies.image_url}
@@ -553,11 +552,11 @@ export default function CapturePage() {
                           )}
                         </div>
                         <div>
-                          <p className="text-base font-semibold text-[#243128]">{suggestion.common_name}</p>
-                          <p className="text-sm italic text-[#5f7267]">{suggestion.scientific_name}</p>
+                          <p className="text-base font-semibold text-forest-dark">{suggestion.common_name}</p>
+                          <p className="text-sm italic text-forest-soft">{suggestion.scientific_name}</p>
                         </div>
                       </div>
-                      <span className="rounded-full border border-[#c6d6c6] bg-[#f5faef] px-2.5 py-1 text-xs font-semibold text-[#3b5a49]">
+                      <span className="rounded-full border border-sand-dark bg-sand px-2.5 py-1 text-xs font-semibold text-forest">
                         {Math.round(suggestion.confidence * 100)}%
                       </span>
                     </div>
@@ -576,7 +575,7 @@ export default function CapturePage() {
                         setSelectedSpeciesId(matchedSpecies.id);
                         setSaveMessage(null);
                       }}
-                      className="mt-3 w-full rounded-full border border-[#b7c8b7] bg-[#e8efe1] px-4 py-2 text-xs font-semibold text-[#355442]"
+                      className="mt-3 w-full rounded-full border border-sand-dark bg-sand-dark px-4 py-2 text-xs font-semibold text-forest"
                     >
                       {selected ? "Seleccionada" : "Seleccionar"}
                     </button>
@@ -588,12 +587,12 @@ export default function CapturePage() {
         ) : null}
 
         {selectedSpecies ? (
-          <section className="rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#5c7565]">Especie elegida</p>
-            <p className="mt-2 text-lg font-medium text-[#243128]">
+          <section className="rounded-3xl border border-sand-dark bg-sand p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">Especie elegida</p>
+            <p className="mt-2 text-lg font-medium text-forest-dark">
               {"🐾"} {selectedSpecies.common_name}
             </p>
-            <p className="mt-1 text-sm italic text-[#5f7267]">
+            <p className="mt-1 text-sm italic text-forest-soft">
               {selectedSpecies.scientific_name ?? "Sin nombre cientifico"}
             </p>
 
@@ -601,13 +600,13 @@ export default function CapturePage() {
               type="button"
               onClick={handleUseLocation}
               disabled={locating}
-              className="mt-4 w-full rounded-full border border-[#c6d5c2] bg-white px-5 py-3 text-sm font-semibold text-[#355442] disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-4 w-full rounded-full border border-sand-dark bg-white px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
             >
               {locating ? "Obteniendo ubicacion..." : "Usar mi ubicacion"}
             </button>
 
             {locationMessage ? (
-              <p className="mt-3 rounded-xl border border-[#d8e0ce] bg-white px-3 py-2 text-sm text-[#4b5f53]">
+              <p className="mt-3 rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-soft">
                 {locationMessage}
               </p>
             ) : null}
@@ -616,13 +615,13 @@ export default function CapturePage() {
               type="button"
               onClick={handleSave}
               disabled={saved || loading || !selectedSpeciesId}
-              className="mt-4 w-full rounded-full border border-[#b7c8b7] bg-[#e8efe1] px-5 py-3 text-sm font-semibold text-[#355442] disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-4 w-full rounded-full border border-sand-dark bg-sand-dark px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
             >
               {saved ? "Guardado" : "Guardar en mi colección"}
             </button>
 
             {saveMessage ? (
-              <p className="mt-3 rounded-xl border border-[#d8e0ce] bg-white px-3 py-2 text-sm text-[#4b5f53]">
+              <p className="mt-3 rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-soft">
                 {saveMessage}
               </p>
             ) : null}

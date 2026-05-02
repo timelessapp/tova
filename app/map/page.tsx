@@ -8,16 +8,26 @@ import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
 type MapSightingRow = {
   id: string;
+  species_id: string | null;
   seen_at: string;
   location_name: string | null;
   latitude: number | null;
   longitude: number | null;
-  species: { common_name: string; image_url: string | null } | null;
+  species: {
+    common_name: string;
+    scientific_name: string | null;
+    category: string | null;
+    image_url: string | null;
+  } | null;
 };
 
 const SightingsMap = dynamic(() => import("@/components/SightingsMap"), {
   ssr: false,
 });
+
+function getLocationLabel(locationName: string | null) {
+  return locationName ? locationName : "Ubicacion guardada";
+}
 
 export default function MapPage() {
   const { user, loading: authLoading } = useCurrentUser();
@@ -49,7 +59,9 @@ export default function MapPage() {
 
       const { data, error } = await supabase
         .from("sightings")
-        .select("id, seen_at, location_name, latitude, longitude, species:species_id(common_name, image_url)")
+        .select(
+          "id, species_id, seen_at, location_name, latitude, longitude, species:species_id(common_name, scientific_name, category, image_url)",
+        )
         .eq("user_id", user.id)
         .not("latitude", "is", null)
         .not("longitude", "is", null)
@@ -82,11 +94,14 @@ export default function MapPage() {
         )
         .map((item) => ({
           id: item.id,
+          speciesId: item.species_id,
           latitude: item.latitude as number,
           longitude: item.longitude as number,
           seenAt: item.seen_at,
           locationName: item.location_name,
           commonName: item.species?.common_name ?? "Especie desconocida",
+          scientificName: item.species?.scientific_name ?? null,
+          category: item.species?.category ?? null,
           imageUrl: item.species?.image_url ?? null,
         })),
     [sightings],
@@ -101,53 +116,92 @@ export default function MapPage() {
   }, [mapPoints]);
 
   return (
-    <main className="min-h-screen bg-[#f7f6ef] px-5 py-6 text-[#243128] sm:px-8">
+    <main className="min-h-screen bg-sand px-5 py-6 text-forest-dark sm:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <header className="flex items-center justify-between rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-5">
+        <header className="flex items-center justify-between rounded-2xl border border-sand-dark bg-sand p-5 sm:p-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#5c7565]">
-              Territorio personal
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#223127]">
-              Mis recuerdos en el territorio
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-forest-dark">
+              Mapa de descubrimientos
             </h1>
+            <p className="mt-2 text-sm text-forest-soft">
+              Los animales que has encontrado, colocados en tu territorio.
+            </p>
           </div>
           <Link
             href="/collection"
-            className="rounded-full border border-[#ced8c5] bg-[#f5f7ef] px-3 py-1.5 text-xs font-medium text-[#3c5646]"
+            className="rounded-full border border-sand-dark bg-sand px-3 py-1.5 text-xs font-medium text-forest"
           >
             Mi colección
           </Link>
         </header>
 
         {loading ? (
-          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
-            <p className="text-sm text-[#55695d]">Cargando mapa...</p>
+          <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
+            <p className="text-sm text-forest-soft">Cargando mapa...</p>
           </section>
         ) : null}
 
         {!loading && message ? (
-          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
-            <p className="text-sm text-[#55695d]">{message}</p>
+          <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
+            <p className="text-sm text-forest-soft">{message}</p>
           </section>
         ) : null}
 
         {!loading && !user ? (
-          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
-            <p className="text-sm text-[#55695d]">Entra para ver tus avistamientos en el mapa.</p>
+          <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
+            <p className="text-sm text-forest-soft">Entra para ver tus avistamientos en el mapa.</p>
           </section>
         ) : null}
 
         {!loading && user && mapPoints.length === 0 ? (
-          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-6 text-center">
-            <p className="text-sm text-[#55695d]">Aun no tienes descubrimientos con ubicacion.</p>
+          <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
+            <p className="text-sm text-forest-soft">Aun no tienes descubrimientos con ubicacion.</p>
           </section>
         ) : null}
 
         {!loading && user && mapPoints.length > 0 ? (
-          <section className="rounded-3xl border border-[#d5decb] bg-[#f1f5ea] p-3 sm:p-4">
-            <div className="h-[65vh] min-h-[360px] overflow-hidden rounded-2xl border border-[#cad7be]">
+          <section className="rounded-2xl border border-sand-dark bg-sand p-3 sm:p-4">
+            <div className="h-[54vh] min-h-[330px] overflow-hidden rounded-xl border border-forest-soft/40 sm:h-[60vh]">
               <SightingsMap points={mapPoints} initialCenter={initialCenter} />
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
+                Descubrimientos en este mapa
+              </h2>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {mapPoints.map((point) => (
+                  <Link
+                    key={`card-${point.id}`}
+                    href={point.speciesId ? `/species/${point.speciesId}` : "/collection"}
+                    className="flex items-center gap-3 rounded-xl border border-sand-dark bg-white px-3 py-2.5 transition hover:bg-sand"
+                  >
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-sand-dark bg-sand-dark">
+                      {point.imageUrl ? (
+                        <img
+                          src={point.imageUrl}
+                          alt={point.commonName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-lg">🐾</div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-forest-dark">{point.commonName}</p>
+                      <p className="truncate text-xs text-forest-soft">📍 {getLocationLabel(point.locationName)}</p>
+                    </div>
+
+                    <p className="shrink-0 text-[11px] text-forest-soft">
+                      {new Date(point.seenAt).toLocaleDateString("es-ES", {
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </p>
+                  </Link>
+                ))}
+              </div>
             </div>
           </section>
         ) : null}

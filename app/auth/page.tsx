@@ -46,8 +46,8 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f6ef] px-5 py-6 text-[#243128] sm:px-8">
-      <div className="mx-auto w-full max-w-md rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-6 sm:p-8">
+    <main className="min-h-screen bg-sand px-5 py-6 text-forest-dark sm:px-8">
+      <div className="mx-auto w-full max-w-md rounded-3xl border border-sand-dark bg-sand p-6 sm:p-8">
         <Link
           href="/"
           className="text-xs font-medium text-[#5e7367] underline-offset-4 hover:underline"
@@ -56,12 +56,12 @@ export default function AuthPage() {
         </Link>
 
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">Entrar</h1>
-        <p className="mt-2 text-sm text-[#55695d]">
+        <p className="mt-2 text-sm text-forest-soft">
           Usa tu email para recibir un magic link. No necesitas contrasena.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3">
-          <label htmlFor="email" className="text-xs font-semibold uppercase tracking-wide text-[#566c60]">
+          <label htmlFor="email" className="text-xs font-semibold uppercase tracking-wide text-forest-soft">
             Email
           </label>
           <input
@@ -71,21 +71,21 @@ export default function AuthPage() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
-            className="rounded-xl border border-[#cfd9c5] bg-white px-3 py-2 text-sm outline-none ring-[#6f9279] focus:ring-2"
+            className="rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm outline-none ring-forest-soft focus:ring-2"
             placeholder="tu@email.com"
           />
 
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 rounded-full bg-[#3f684f] px-5 py-3 text-sm font-semibold text-[#f7f6ef] disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-sand disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting ? "Enviando..." : "Enviar magic link"}
           </button>
         </form>
 
         {statusMessage ? (
-          <p className="mt-4 rounded-xl border border-[#d8e0ce] bg-white px-3 py-2 text-sm text-[#44584d]">
+          <p className="mt-4 rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-soft">
             {statusMessage}
           </p>
         ) : null}

@@ -8,7 +8,7 @@ export default function AuthButton() {
 
   if (loading) {
     return (
-      <span className="rounded-full border border-[#cfdbc4] bg-[#f6f8f1] px-3 py-1 text-xs font-medium text-[#607468]">
+      <span className="rounded-full border border-sand-dark bg-sand px-3 py-1 text-xs font-medium text-[#607468]">
         Cargando...
       </span>
     );
@@ -16,7 +16,7 @@ export default function AuthButton() {
 
   if (user) {
     return (
-      <span className="rounded-full border border-[#bcd2ba] bg-[#e7f0df] px-3 py-1 text-xs font-medium text-[#355442]">
+      <span className="rounded-full border border-sand-dark bg-sand-dark px-3 py-1 text-xs font-medium text-forest">
         Sesion activa
       </span>
     );
@@ -25,7 +25,7 @@ export default function AuthButton() {
   return (
     <Link
       href="/auth"
-      className="rounded-full border border-[#bfd0bf] bg-[#edf3e7] px-3 py-1 text-xs font-semibold text-[#345241] transition-colors hover:bg-[#e4ecdc]"
+      className="rounded-full border border-sand-dark bg-sand-dark px-3 py-1 text-xs font-semibold text-forest transition-colors hover:bg-sand-dark"
     >
       Entrar
     </Link>

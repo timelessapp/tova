@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import SpeciesSightingPhoto from "@/components/SpeciesSightingPhoto";
+import SpeciesSightingLocation from "@/components/SpeciesSightingLocation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
 import { mockSpecies } from "@/lib/mockSpecies";
 import type { Species } from "@/lib/types";
@@ -183,14 +184,10 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
             </ul>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-[#d8e1d0] bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
-              Donde se vio
-            </p>
-            <p className="mt-1 text-sm text-[#34473d]">
-              {species.locationName ?? "Aun sin avistamientos guardados."}
-            </p>
-          </div>
+          <SpeciesSightingLocation
+            speciesId={species.id}
+            fallbackLocationName={species.locationName}
+          />
 
           <SpeciesSightingPhoto speciesId={species.id} />
         </section>

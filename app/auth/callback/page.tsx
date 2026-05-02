@@ -51,17 +51,17 @@ export default function AuthCallbackPage() {
   }, [router]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f6ef] px-5 py-6 text-[#243128] sm:px-8">
-      <section className="w-full max-w-md rounded-3xl border border-[#d8e0ce] bg-[#fbfbf8] p-6 text-center">
+    <main className="flex min-h-screen items-center justify-center bg-sand px-5 py-6 text-forest-dark sm:px-8">
+      <section className="w-full max-w-md rounded-3xl border border-sand-dark bg-sand p-6 text-center">
         {errorMessage ? (
           <>
             <h1 className="text-xl font-semibold">No se pudo iniciar sesion</h1>
-            <p className="mt-2 text-sm text-[#55695d]">{errorMessage}</p>
+            <p className="mt-2 text-sm text-forest-soft">{errorMessage}</p>
           </>
         ) : (
           <>
             <h1 className="text-xl font-semibold">Validando enlace...</h1>
-            <p className="mt-2 text-sm text-[#55695d]">Estamos iniciando tu sesion.</p>
+            <p className="mt-2 text-sm text-forest-soft">Estamos iniciando tu sesion.</p>
           </>
         )}
       </section>
