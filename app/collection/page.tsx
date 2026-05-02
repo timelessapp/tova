@@ -44,6 +44,26 @@ const categoryLabelMap: Record<SpeciesCategory, string> = {
   other: "Otro",
 };
 
+const categoryLockedBg: Record<SpeciesCategory, string> = {
+  mammal: "bg-green-100",
+  bird: "bg-blue-100",
+  reptile: "bg-yellow-100",
+  amphibian: "bg-emerald-100",
+  insect: "bg-amber-100",
+  fish: "bg-cyan-100",
+  other: "bg-gray-100",
+};
+
+const categoryLockedIcon: Record<SpeciesCategory, string> = {
+  mammal: "🐾",
+  bird: "🪶",
+  reptile: "🦎",
+  amphibian: "🐸",
+  insect: "🪲",
+  fish: "🐟",
+  other: "❓",
+};
+
 const speciesSelectFields = "id, common_name, scientific_name, category, image_url";
 
 export default function CollectionPage() {
@@ -380,35 +400,36 @@ export default function CollectionPage() {
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleUndiscoveredSpecies.map((speciesItem) => {
-            const categoryLabel =
-              categoryLabelMap[(speciesItem.category as SpeciesCategory) ?? "other"] ??
-              "Otro";
+              const cat = (speciesItem.category as SpeciesCategory) ?? "other";
+              const categoryLabel = categoryLabelMap[cat] ?? "Otro";
+              const lockedBg = categoryLockedBg[cat] ?? "bg-gray-100";
+              const lockedIcon = categoryLockedIcon[cat] ?? "❓";
 
-            return (
-              <button
-                type="button"
-                key={speciesItem.id}
-                onClick={() =>
-                  setLockedMessage("Todavía no has descubierto este animal")
-                }
-                className="relative flex h-56 flex-col overflow-hidden rounded-2xl border border-[#d9dfd2] bg-[#f3f4ef] p-4 text-left"
-              >
-                <div className="mb-3 flex h-16 items-center justify-center rounded-xl bg-[#e7ebe3] text-2xl text-[#8a968f] blur-[0.6px]">
-                  🐾
-                </div>
-                <h2 className="text-sm font-semibold text-[#526359]">
-                  {speciesItem.common_name}
-                </h2>
-                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-[#7a867f]">
-                  No descubierto
-                </p>
-                <p className="mt-2 text-xs text-[#859289]">Sigue explorando para desbloquearlo.</p>
-                <p className="mt-auto pt-3 text-xs font-medium uppercase tracking-wide text-[#7a867f]">
-                  {categoryLabel}
-                </p>
-                <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-[#eef2ea]/50" />
-              </button>
-            );
+              return (
+                <button
+                  type="button"
+                  key={speciesItem.id}
+                  onClick={() => setLockedMessage("Todavía no has descubierto este animal")}
+                  className="flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-[#d6ddcb] bg-white text-left transition hover:-translate-y-0.5 hover:shadow-sm"
+                >
+                  <div className="p-3 pb-0">
+                    <div className={`overflow-hidden rounded-2xl ${lockedBg}`}>
+                      <div className="aspect-[4/5] w-full flex items-center justify-center opacity-60">
+                        <span className="text-5xl">{lockedIcon}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
+                    <h3 className="text-sm font-semibold text-[#2b3b33]">
+                      {categoryLabel} desconocido
+                    </h3>
+                    <p className="mt-1 text-xs italic text-[#5c6f64]">Aún por descubrir</p>
+                    <p className="mt-auto pt-3 text-xs font-medium uppercase tracking-wide text-[#597061]">
+                      {categoryLabel}
+                    </p>
+                  </div>
+                </button>
+              );
             })}
           </div>
 
