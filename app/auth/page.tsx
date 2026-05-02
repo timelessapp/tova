@@ -25,7 +25,7 @@ export default function AuthPage() {
     setSubmitting(true);
     setStatusMessage(null);
 
-    const redirectTo = `${window.location.origin}/auth/callback?next=/capture`;
+    const redirectTo = `${window.location.origin}/auth/callback`;
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
