@@ -410,20 +410,23 @@ export default function CollectionPage() {
                   type="button"
                   key={speciesItem.id}
                   onClick={() => setLockedMessage("Todavía no has descubierto este animal")}
-                  className="flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-[#d6ddcb] bg-white text-left transition hover:-translate-y-0.5 hover:shadow-sm"
+                  className="flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-[#d6ddcb] bg-white text-left opacity-70 transition hover:-translate-y-0.5 hover:shadow-sm"
                 >
                   <div className="p-3 pb-0">
                     <div className={`overflow-hidden rounded-2xl ${lockedBg}`}>
-                      <div className="aspect-[4/5] w-full flex items-center justify-center opacity-60">
+                      <div className="aspect-[4/5] w-full flex items-center justify-center">
                         <span className="text-5xl">{lockedIcon}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
                     <h3 className="text-sm font-semibold text-[#2b3b33]">
-                      {categoryLabel} desconocido
+                      {speciesItem.common_name}
                     </h3>
-                    <p className="mt-1 text-xs italic text-[#5c6f64]">Aún por descubrir</p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-[#8a968f]">
+                      No descubierto
+                    </p>
+                    <p className="mt-1 text-xs text-[#5c6f64]">Por descubrir</p>
                     <p className="mt-auto pt-3 text-xs font-medium uppercase tracking-wide text-[#597061]">
                       {categoryLabel}
                     </p>
