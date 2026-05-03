@@ -139,7 +139,8 @@ export default function TrophiesPage() {
   return (
     <main className="min-h-screen bg-sand px-5 pb-28 pt-6 text-forest-dark sm:px-8">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-        <header className="rounded-3xl border border-sand-dark bg-sand p-5 sm:p-7">
+        <header className="overflow-hidden rounded-2xl border border-[#d8cdb5] bg-[#f1eadb] p-6 shadow-[0_10px_22px_-16px_rgba(47,93,80,0.55)] sm:p-7">
+          <div className="-mx-6 -mt-6 mb-4 h-1.5 bg-[#2F5D50] sm:-mx-7 sm:-mt-7" />
           <Link
             href="/collection"
             className="text-xs font-medium text-[#5e7367] underline-offset-4 hover:underline"
@@ -148,7 +149,7 @@ export default function TrophiesPage() {
           </Link>
           <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-forest-soft">TOVA</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">Trofeos</h1>
-          <p className="mt-2 text-sm text-forest-soft">
+          <p className="mt-2 text-sm text-forest">
             {trophies.length === 0 && !loading
               ? "Aún no has desbloqueado ningún trofeo."
               : `${trophies.length} trofeo${trophies.length === 1 ? "" : "s"} desbloqueado${trophies.length === 1 ? "" : "s"}.`}
@@ -156,23 +157,23 @@ export default function TrophiesPage() {
         </header>
 
         {loading ? (
-          <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
+          <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
             <p className="text-sm text-forest-soft">Cargando trofeos...</p>
           </section>
         ) : null}
 
         {!loading && message ? (
-          <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
+          <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
             <p className="text-sm text-forest-soft">{message}</p>
           </section>
         ) : null}
 
         {!loading && !authLoading && !user ? (
-          <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
+          <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
             <p className="text-sm text-forest-soft">Entra para ver tus trofeos.</p>
             <Link
               href="/auth"
-              className="mt-4 inline-flex rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-sand"
+              className="mt-4 inline-flex rounded-full bg-[#2F5D50] px-5 py-2.5 text-sm font-semibold text-[#F4F1E8]"
             >
               Entrar
             </Link>
@@ -186,7 +187,7 @@ export default function TrophiesPage() {
 
       <Link
         href="/capture"
-        className="fixed bottom-5 left-1/2 z-20 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2 rounded-full bg-forest px-6 py-4 text-center text-sm font-semibold text-sand shadow-[0_12px_24px_-16px_rgba(26,42,34,0.8)]"
+        className="fixed bottom-5 left-1/2 z-20 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2 rounded-full bg-[#2F5D50] px-6 py-4 text-center text-sm font-semibold text-[#F4F1E8] shadow-[0_18px_34px_-18px_rgba(26,42,34,0.95)]"
       >
         Capturar nuevo descubrimiento
       </Link>

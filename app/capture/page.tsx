@@ -95,7 +95,9 @@ export default function CapturePage() {
   const [discoveryModal, setDiscoveryModal] = useState<{
     mode: "new" | "repeat";
     commonName: string;
-    emoji: string;
+    scientificName?: string | null;
+    category?: SpeciesCategory | null;
+    imageUrl?: string | null;
     achievement?: string;
   } | null>(null);
 
@@ -379,7 +381,9 @@ export default function CapturePage() {
           setDiscoveryModal({
             mode: discoveryMode,
             commonName: selectedSpecies.common_name,
-            emoji: "🐾",
+            scientificName: selectedSpecies.scientific_name,
+            category: selectedSpecies.category as SpeciesCategory,
+            imageUrl: selectedSpecies.image_url,
             achievement:
               discoveryMode === "new" && firstAchievement
                 ? `Logro desbloqueado: ${firstAchievement}`
@@ -394,7 +398,9 @@ export default function CapturePage() {
     setDiscoveryModal({
       mode: lastDiscoveryMode === discoveryMode ? lastDiscoveryMode : discoveryMode,
       commonName: selectedSpecies.common_name,
-      emoji: "🐾",
+      scientificName: selectedSpecies.scientific_name,
+      category: selectedSpecies.category as SpeciesCategory,
+      imageUrl: selectedSpecies.image_url,
     });
   };
 
@@ -437,7 +443,9 @@ export default function CapturePage() {
         <DiscoveryModal
           mode={discoveryModal.mode}
           commonName={discoveryModal.commonName}
-          emoji={discoveryModal.emoji}
+          scientificName={discoveryModal.scientificName}
+          category={discoveryModal.category}
+          imageUrl={discoveryModal.imageUrl}
           achievement={discoveryModal.achievement}
           onClose={() => {
             setDiscoveryModal(null);

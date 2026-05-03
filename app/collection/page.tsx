@@ -416,7 +416,12 @@ export default function CollectionPage() {
           <div className="-mx-6 -mt-6 mb-4 h-1.5 bg-[#2F5D50] sm:-mx-7 sm:-mt-7" />
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">TOVA</p>
+              <Link
+                href="/"
+                className="inline-flex text-xs font-semibold uppercase tracking-wider text-forest-soft underline-offset-4 hover:underline"
+              >
+                TOVA
+              </Link>
               <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">Mi colección</h1>
               <p className="mt-1 text-sm text-forest">Tu álbum de descubrimientos</p>
 
@@ -475,29 +480,40 @@ export default function CollectionPage() {
           </section>
         ) : null}
 
-        {filteredRecentSpecies.length > 0 ? (
+        {!loading && !message ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-                Descubrimientos recientes
+                Filtros
               </h2>
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  filtersOpen || selectedCategory !== "all"
-                    ? "border-forest bg-forest text-sand"
-                    : "border-sand-dark bg-white text-forest hover:bg-sand-dark"
-                }`}
-              >
-                <span>Filtros</span>
-                {selectedCategory !== "all" && (
-                  <span className="rounded-full bg-white/30 px-1.5 py-0.5 text-[10px]">
-                    {categoryOptions.find((o) => o.value === selectedCategory)?.label}
-                  </span>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/map"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sand-dark bg-white text-sm text-forest transition-colors hover:bg-sand-dark"
+                  aria-label="Ver recuerdos en el mapa"
+                  title="Ver recuerdos en el mapa"
+                >
+                  🗺️
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    filtersOpen || selectedCategory !== "all"
+                      ? "border-forest bg-forest text-sand"
+                      : "border-sand-dark bg-white text-forest hover:bg-sand-dark"
+                  }`}
+                >
+                  <span>Filtros</span>
+                  {selectedCategory !== "all" && (
+                    <span className="rounded-full bg-white/30 px-1.5 py-0.5 text-[10px]">
+                      {categoryOptions.find((o) => o.value === selectedCategory)?.label}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
+
             {filtersOpen && (
               <div className="flex flex-wrap gap-2">
                 {categoryOptions.map((option) => {
@@ -519,6 +535,14 @@ export default function CollectionPage() {
                 })}
               </div>
             )}
+          </section>
+        ) : null}
+
+        {filteredRecentSpecies.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
+              Descubrimientos recientes
+            </h2>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {filteredRecentSpecies.map(renderUnlockedCard)}
@@ -606,12 +630,6 @@ export default function CollectionPage() {
           </section>
         ) : null}
 
-        <Link
-          href="/map"
-          className="self-start rounded-full border border-sand-dark bg-sand px-4 py-2 text-sm font-medium text-forest"
-        >
-          Ver recuerdos en el mapa
-        </Link>
       </div>
 
       <Link
