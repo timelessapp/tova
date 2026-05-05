@@ -15,6 +15,11 @@ interface IdentifySuggestion {
   confidence: number;
 }
 
+interface IdentifyResponse {
+  status: "identified" | "uncertain";
+  suggestion: IdentifySuggestion | null;
+}
+
 interface IdentifyBody {
   image?: string;
   speciesList?: SpeciesCandidate[];
@@ -26,10 +31,11 @@ const SYSTEM_PROMPT =
   "Eres un experto en fauna de la península ibérica. Solo puedes responder con especies presentes en la lista proporcionada. No inventes especies. Si no estás seguro, devuelve un array vacío.";
 
 const USER_PROMPT =
-  "Analiza esta imagen y devuelve hasta 3 posibles especies de la lista. Prioriza animales comunes. Devuelve resultados ordenados por probabilidad.";
+  "Analiza esta imagen y devuelve hasta 3 posibles especies de la lista con un valor de confianza entre 0 y 1, ordenadas por probabilidad. Si la imagen no es clara, no contiene un animal o no puedes reconocerlo con seguridad, devuelve un array vacío.";
 
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const MAX_SPECIES_COUNT = 250;
+const IDENTIFY_CONFIDENCE_THRESHOLD = 0.7;
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
@@ -265,7 +271,10 @@ export async function POST(request: Request) {
     const rawText = completion.choices[0]?.message?.content ?? "";
 
     if (!rawText) {
-      return NextResponse.json({ suggestions: [] });
+      return NextResponse.json({
+        status: "uncertain",
+        suggestion: null,
+      } satisfies IdentifyResponse);
     }
 
     let parsed: unknown;
@@ -283,7 +292,21 @@ export async function POST(request: Request) {
       return commonAllowed || scientificAllowed;
     });
 
-    return NextResponse.json({ suggestions });
+    const bestSuggestion = [...suggestions].sort(
+      (left, right) => right.confidence - left.confidence,
+    )[0];
+
+    if (!bestSuggestion || bestSuggestion.confidence < IDENTIFY_CONFIDENCE_THRESHOLD) {
+      return NextResponse.json({
+        status: "uncertain",
+        suggestion: null,
+      } satisfies IdentifyResponse);
+    }
+
+    return NextResponse.json({
+      status: "identified",
+      suggestion: bestSuggestion,
+    } satisfies IdentifyResponse);
   } catch {
     return NextResponse.json(
       { error: "Error al consultar OpenAI para identificar la imagen." },

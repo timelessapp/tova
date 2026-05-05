@@ -1,5 +1,6 @@
 "use client";
 
+import exifr from "exifr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,7 +16,7 @@ import DiscoveryModal from "@/components/DiscoveryModal";
 
 type SpeciesOption = Pick<
   Species,
-  "id" | "common_name" | "scientific_name" | "category" | "image_url"
+  "id" | "common_name" | "scientific_name" | "description" | "category" | "image_url"
 >;
 
 interface IdentifySuggestion {
@@ -25,9 +26,17 @@ interface IdentifySuggestion {
 }
 
 interface IdentifyApiResponse {
-  suggestions?: IdentifySuggestion[];
+  status?: "identified" | "uncertain";
+  suggestion?: IdentifySuggestion | null;
   error?: string;
 }
+
+type IdentificationResult =
+  | { status: "identified"; suggestion: IdentifySuggestion }
+  | { status: "uncertain" }
+  | null;
+
+type LocationSource = "photo-metadata" | "device" | null;
 
 async function uploadSightingPhoto(
   supabase: ReturnType<typeof createSupabaseBrowserClient>,
@@ -80,7 +89,8 @@ export default function CapturePage() {
   const [photoName, setPhotoName] = useState<string>("");
   const [identifyLoading, setIdentifyLoading] = useState(false);
   const [identifyMessage, setIdentifyMessage] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<IdentifySuggestion[]>([]);
+  const [identificationResult, setIdentificationResult] = useState<IdentificationResult>(null);
+  const [speciesPreviewFailed, setSpeciesPreviewFailed] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<string>("");
@@ -88,14 +98,17 @@ export default function CapturePage() {
     latitude: number;
     longitude: number;
   } | null>(null);
+  const [locationSource, setLocationSource] = useState<LocationSource>(null);
   const [locating, setLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const [lastDiscoveryMode, setLastDiscoveryMode] = useState<"new" | "repeat" | null>(null);
   const suggestionsRef = useRef<HTMLElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [discoveryModal, setDiscoveryModal] = useState<{
     mode: "new" | "repeat";
     commonName: string;
     scientificName?: string | null;
+    description?: string | null;
     category?: SpeciesCategory | null;
     imageUrl?: string | null;
     achievement?: string;
@@ -114,7 +127,7 @@ export default function CapturePage() {
 
       const { data, error } = await supabase
         .from("species")
-        .select("id, common_name, scientific_name, category, image_url")
+        .select("id, common_name, scientific_name, description, category, image_url")
         .eq("is_active", true)
         .order("common_name", { ascending: true });
 
@@ -141,18 +154,65 @@ export default function CapturePage() {
     [selectedSpeciesId, speciesOptions],
   );
 
-  const handleImageSelection: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+  const resetIdentification = () => {
+    setIdentificationResult(null);
+    setSpeciesPreviewFailed(false);
+    setSelectedSpeciesId("");
+    setSaveMessage(null);
+    setSaved(false);
+  };
+
+  const resetPhotoFlow = () => {
+    setPhotoDataUrl(null);
+    setPhotoName("");
+    setIdentifyMessage(null);
+    setCapturedLocation(null);
+    setLocationSource(null);
+    setLocationMessage(null);
+    resetIdentification();
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleImageSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
     if (!file) {
       setPhotoDataUrl(null);
       setPhotoName("");
       setIdentifyMessage("Selecciona una foto antes de identificar.");
+      resetIdentification();
 
       return;
     }
 
     const reader = new FileReader();
+
+    setCapturedLocation(null);
+    setLocationSource(null);
+    setLocationMessage(null);
+
+    try {
+      const gps = await exifr.gps(file);
+      if (
+        gps &&
+        typeof gps.latitude === "number" &&
+        typeof gps.longitude === "number"
+      ) {
+        setCapturedLocation({
+          latitude: gps.latitude,
+          longitude: gps.longitude,
+        });
+        setLocationSource("photo-metadata");
+        setLocationMessage("Ubicacion detectada en los metadatos de la foto.");
+      }
+    } catch {
+      setCapturedLocation(null);
+      setLocationSource(null);
+      setLocationMessage(null);
+    }
 
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : null;
@@ -160,10 +220,7 @@ export default function CapturePage() {
       setPhotoDataUrl(result);
       setPhotoName(file.name);
       setIdentifyMessage(null);
-      setSuggestions([]);
-      setSelectedSpeciesId("");
-      setSaveMessage(null);
-      setSaved(false);
+      resetIdentification();
     };
 
     reader.onerror = () => {
@@ -190,8 +247,7 @@ export default function CapturePage() {
 
     setIdentifyLoading(true);
     setIdentifyMessage(null);
-    setSuggestions([]);
-    setSelectedSpeciesId("");
+    resetIdentification();
 
     try {
       const response = await fetch("/api/identify", {
@@ -218,17 +274,30 @@ export default function CapturePage() {
         return;
       }
 
-      const apiSuggestions = payload.suggestions ?? [];
-
-      if (apiSuggestions.length === 0) {
-        setIdentifyMessage("La imagen no es clara o no contiene un animal identificable.");
-        setIdentifyLoading(false);
+      if (payload.status !== "identified" || !payload.suggestion) {
+        setIdentificationResult({ status: "uncertain" });
+        setIdentifyMessage(null);
+        setTimeout(() => {
+          suggestionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
 
         return;
       }
 
-      setSuggestions(apiSuggestions.slice(0, 3));
-      setIdentifyMessage("Elige la opción que mejor encaje con tu avistamiento.");
+      const normalizedScientific = payload.suggestion.scientific_name.trim().toLowerCase();
+      const matchedSpecies = speciesOptions.find(
+        (species) =>
+          (species.scientific_name ?? "").trim().toLowerCase() === normalizedScientific,
+      );
+
+      if (!matchedSpecies) {
+        setIdentifyMessage("No pudimos vincular la sugerencia con una especie activa de la app.");
+        return;
+      }
+
+      setIdentificationResult({ status: "identified", suggestion: payload.suggestion });
+      setSpeciesPreviewFailed(false);
+      setSelectedSpeciesId(matchedSpecies.id);
       setTimeout(() => {
         suggestionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
@@ -382,6 +451,7 @@ export default function CapturePage() {
             mode: discoveryMode,
             commonName: selectedSpecies.common_name,
             scientificName: selectedSpecies.scientific_name,
+            description: selectedSpecies.description,
             category: selectedSpecies.category as SpeciesCategory,
             imageUrl: selectedSpecies.image_url,
             achievement:
@@ -399,6 +469,7 @@ export default function CapturePage() {
       mode: lastDiscoveryMode === discoveryMode ? lastDiscoveryMode : discoveryMode,
       commonName: selectedSpecies.common_name,
       scientificName: selectedSpecies.scientific_name,
+      description: selectedSpecies.description,
       category: selectedSpecies.category as SpeciesCategory,
       imageUrl: selectedSpecies.image_url,
     });
@@ -421,12 +492,12 @@ export default function CapturePage() {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
-        setLocationMessage("Ubicacion anadida");
+        setLocationSource("device");
+        setLocationMessage("Ubicacion actualizada con tu dispositivo.");
         setLocating(false);
       },
       () => {
-        setCapturedLocation(null);
-        setLocationMessage("Puedes guardar sin ubicacion.");
+        setLocationMessage("No pudimos obtener tu ubicacion. Puedes guardar sin ella.");
         setLocating(false);
       },
       {
@@ -437,6 +508,18 @@ export default function CapturePage() {
     );
   };
 
+  const handleRejectSuggestion = () => {
+    resetIdentification();
+    setIdentifyMessage("Gracias. Puedes intentarlo con otra foto.");
+  };
+
+  const handlePickAnotherPhoto = () => {
+    resetPhotoFlow();
+    requestAnimationFrame(() => {
+      fileInputRef.current?.click();
+    });
+  };
+
   return (
     <main className="min-h-screen bg-sand px-5 py-6 text-forest-dark sm:px-8">
       {discoveryModal ? (
@@ -444,6 +527,7 @@ export default function CapturePage() {
           mode={discoveryModal.mode}
           commonName={discoveryModal.commonName}
           scientificName={discoveryModal.scientificName}
+          description={discoveryModal.description}
           category={discoveryModal.category}
           imageUrl={discoveryModal.imageUrl}
           achievement={discoveryModal.achievement}
@@ -489,19 +573,33 @@ export default function CapturePage() {
             name="sighting-photo"
             type="file"
             accept="image/*"
+            ref={fileInputRef}
             onChange={handleImageSelection}
             className="mt-2 block w-full rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-dark file:mr-3 file:rounded-full file:border-0 file:bg-sand-dark file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-forest"
           />
-          {photoName ? <p className="mt-2 text-xs text-forest-soft">Foto seleccionada: {photoName}</p> : null}
 
-          <button
-            type="button"
-            onClick={handleIdentify}
-            disabled={identifyLoading || loadingSpecies || !photoDataUrl || speciesOptions.length === 0}
-            className="mt-5 w-full rounded-full bg-forest px-5 py-3 text-sm font-semibold text-sand transition-colors hover:bg-forest-dark disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {identifyLoading ? "Analizando imagen..." : "Identificar animal"}
-          </button>
+          <div className="mt-5 rounded-2xl border border-[#d8cdb5] bg-[#f1eadb] p-4 shadow-[0_10px_22px_-16px_rgba(47,93,80,0.35)]">
+            <div className="mb-3 h-1 w-16 rounded-full bg-[#2F5D50]" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
+              Identificacion con IA
+            </p>
+            <p className="mt-1 text-sm text-forest">
+              Analiza la foto y te mostraremos una especie solo cuando el resultado sea fiable.
+            </p>
+
+            <button
+              type="button"
+              onClick={handleIdentify}
+              disabled={identifyLoading || loadingSpecies || !photoDataUrl || speciesOptions.length === 0}
+              className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3.5 text-sm font-semibold text-[#F4F1E8] shadow-[0_14px_24px_-16px_rgba(26,42,34,0.95)] transition hover:bg-[#264d42] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {identifyLoading ? "Analizando imagen..." : "Identificar animal"}
+            </button>
+
+            <p className="mt-3 text-xs text-forest-soft">
+              Solo te mostramos una especie cuando la IA esta muy segura de la identificacion.
+            </p>
+          </div>
 
           {speciesMessage ? (
             <p className="mt-3 rounded-xl border border-sand-dark bg-sand px-3 py-2 text-sm text-forest-soft">
@@ -509,7 +607,7 @@ export default function CapturePage() {
             </p>
           ) : null}
 
-          {identifyMessage ? (
+          {identifyMessage && identificationResult?.status !== "uncertain" ? (
             <p className="mt-3 rounded-xl border border-sand-dark bg-sand px-3 py-2 text-sm text-forest-soft">
               {identifyMessage}
             </p>
@@ -522,119 +620,131 @@ export default function CapturePage() {
           </p>
         ) : null}
 
-        {suggestions.length > 0 ? (
+        {identificationResult?.status === "identified" && selectedSpecies ? (
           <section ref={suggestionsRef} className="rounded-3xl border border-sand-dark bg-sand p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
-              Sugerencias IA
+              Resultado IA
             </p>
 
-            <div className="mt-4 grid gap-3">
-              {suggestions.map((suggestion, index) => {
-                const normalizedScientific = suggestion.scientific_name.trim().toLowerCase();
-                const matchedSpecies = speciesOptions.find(
-                  (species) =>
-                    (species.scientific_name ?? "").trim().toLowerCase() === normalizedScientific,
-                );
-                const selected = matchedSpecies?.id === selectedSpeciesId;
+            <article className="mt-4 rounded-2xl border border-[#6f9279] bg-[#edf5ea] px-4 py-4">
+              <p className="text-sm font-medium text-forest-soft">Creemos que es:</p>
+              <p className="mt-1 text-xs text-forest-soft">
+                Solo mostramos este resultado porque la IA tiene una confianza alta.
+              </p>
+              <div className="mt-3 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-sand-dark">
+                    {!speciesPreviewFailed && (selectedSpecies.image_url ?? photoDataUrl) ? (
+                      <img
+                        src={selectedSpecies.image_url ?? photoDataUrl ?? undefined}
+                        alt={identificationResult.suggestion.common_name}
+                        className="h-full w-full object-cover"
+                        onError={() => setSpeciesPreviewFailed(true)}
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-2xl">🐾</span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold text-forest-dark">
+                      {identificationResult.suggestion.common_name}
+                    </p>
+                    <p className="text-sm italic text-forest-soft">
+                      {identificationResult.suggestion.scientific_name}
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full border border-[#b7c9b7] bg-white px-2.5 py-1 text-xs font-semibold text-forest">
+                  {Math.round(identificationResult.suggestion.confidence * 100)}%
+                </span>
+              </div>
 
-                return (
-                  <article
-                    key={`${suggestion.common_name}-${suggestion.scientific_name}-${index}`}
-                    className={`rounded-2xl border px-4 py-3 ${
-                      selected
-                        ? "border-[#6f9279] bg-[#edf5ea]"
-                        : "border-sand-dark bg-white"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-sand-dark">
-                          {matchedSpecies?.image_url ? (
-                            <img
-                              src={matchedSpecies.image_url}
-                              alt={suggestion.common_name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-full w-full items-center justify-center text-2xl">🐾</span>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-base font-semibold text-forest-dark">{suggestion.common_name}</p>
-                          <p className="text-sm italic text-forest-soft">{suggestion.scientific_name}</p>
-                        </div>
-                      </div>
-                      <span className="rounded-full border border-sand-dark bg-sand px-2.5 py-1 text-xs font-semibold text-forest">
-                        {Math.round(suggestion.confidence * 100)}%
-                      </span>
-                    </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={handleUseLocation}
+                  disabled={locating}
+                  className="rounded-full border border-sand-dark bg-white px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {locating
+                    ? "Obteniendo ubicacion..."
+                    : capturedLocation
+                      ? "Cambiar ubicacion"
+                      : "Anadir ubicacion"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saved || loading || !selectedSpeciesId}
+                  className="rounded-full bg-[#2F5D50] px-5 py-3 text-sm font-semibold text-[#F4F1E8] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {saved ? "Guardado" : "Guardar descubrimiento"}
+                </button>
+              </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!matchedSpecies) {
-                          setSaveMessage(
-                            "Esta sugerencia no coincide con una especie activa en la app.",
-                          );
+              <div className="mt-3 rounded-xl border border-[#cfe0d2] bg-white/70 px-3 py-2 text-sm text-forest-soft">
+                {capturedLocation ? (
+                  <>
+                    <p className="font-medium text-forest-dark">
+                      {locationSource === "photo-metadata"
+                        ? "Ubicacion detectada en la foto"
+                        : "Ubicacion elegida para este descubrimiento"}
+                    </p>
+                    <p className="mt-1 text-xs text-forest-soft">
+                      {capturedLocation.latitude.toFixed(5)}, {capturedLocation.longitude.toFixed(5)}
+                    </p>
+                  </>
+                ) : (
+                  <p>
+                    La foto no incluye ubicacion. Puedes anadirla desde aqui antes de guardar.
+                  </p>
+                )}
+                {locationMessage ? (
+                  <p className="mt-1 text-xs text-forest-soft">{locationMessage}</p>
+                ) : null}
+              </div>
 
-                          return;
-                        }
+              <button
+                type="button"
+                onClick={handleRejectSuggestion}
+                className="mt-3 w-full rounded-full border border-sand-dark bg-white px-5 py-3 text-sm font-semibold text-forest"
+              >
+                No es esta especie
+              </button>
 
-                        setSelectedSpeciesId(matchedSpecies.id);
-                        setSaveMessage(null);
-                      }}
-                      className="mt-3 w-full rounded-full border border-sand-dark bg-sand-dark px-4 py-2 text-xs font-semibold text-forest"
-                    >
-                      {selected ? "Seleccionada" : "Seleccionar"}
-                    </button>
-                  </article>
-                );
-              })}
+              {saveMessage ? (
+                <p className="mt-3 rounded-xl border border-[#cfe0d2] bg-white/70 px-3 py-2 text-sm text-forest-soft">
+                  {saveMessage}
+                </p>
+              ) : null}
+            </article>
+          </section>
+        ) : null}
+
+        {identificationResult?.status === "uncertain" ? (
+          <section ref={suggestionsRef} className="rounded-3xl border border-sand-dark bg-sand p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
+              Resultado IA
+            </p>
+            <div className="mt-4 rounded-2xl border border-sand-dark bg-white px-4 py-4">
+              <p className="text-base font-medium text-forest-dark">
+                La imagen no permite reconocer exactamente el animal.
+              </p>
+              <p className="mt-2 text-sm text-forest-soft">Intentalo con una nueva foto.</p>
+              <button
+                type="button"
+                onClick={handlePickAnotherPhoto}
+                className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3 text-sm font-semibold text-[#F4F1E8]"
+              >
+                Elegir otra foto
+              </button>
+              <p className="mt-2 text-xs text-forest-soft">
+                Se abrira el selector de tu dispositivo para hacer una foto nueva o cargar una imagen.
+              </p>
             </div>
           </section>
         ) : null}
 
-        {selectedSpecies ? (
-          <section className="rounded-3xl border border-sand-dark bg-sand p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">Especie elegida</p>
-            <p className="mt-2 text-lg font-medium text-forest-dark">
-              {"🐾"} {selectedSpecies.common_name}
-            </p>
-            <p className="mt-1 text-sm italic text-forest-soft">
-              {selectedSpecies.scientific_name ?? "Sin nombre cientifico"}
-            </p>
-
-            <button
-              type="button"
-              onClick={handleUseLocation}
-              disabled={locating}
-              className="mt-4 w-full rounded-full border border-sand-dark bg-white px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {locating ? "Obteniendo ubicacion..." : "Usar mi ubicacion"}
-            </button>
-
-            {locationMessage ? (
-              <p className="mt-3 rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-soft">
-                {locationMessage}
-              </p>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saved || loading || !selectedSpeciesId}
-              className="mt-4 w-full rounded-full border border-sand-dark bg-sand-dark px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {saved ? "Guardado" : "Guardar en mi colección"}
-            </button>
-
-            {saveMessage ? (
-              <p className="mt-3 rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-soft">
-                {saveMessage}
-              </p>
-            ) : null}
-          </section>
-        ) : null}
       </div>
     </main>
   );
