@@ -32,24 +32,24 @@ type CategoryOption = {
 };
 
 const categoryOptions: CategoryOption[] = [
-  { label: "Todos", value: "all" },
-  { label: "Mamíferos", value: "mammal" },
-  { label: "Aves", value: "bird" },
-  { label: "Reptiles", value: "reptile" },
-  { label: "Anfibios", value: "amphibian" },
-  { label: "Insectos", value: "insect" },
-  { label: "Peces", value: "fish" },
-  { label: "Otros", value: "other" },
+  { label: "Tots", value: "all" },
+  { label: "Mamífers", value: "mammal" },
+  { label: "Ocells", value: "bird" },
+  { label: "Rèptils", value: "reptile" },
+  { label: "Amfibis", value: "amphibian" },
+  { label: "Insectes", value: "insect" },
+  { label: "Peixos", value: "fish" },
+  { label: "Altres", value: "other" },
 ];
 
 const categoryLabelMap: Record<SpeciesCategory, string> = {
-  mammal: "Mamífero",
-  bird: "Ave",
-  reptile: "Reptil",
-  amphibian: "Anfibio",
-  insect: "Insecto",
-  fish: "Pez",
-  other: "Otro",
+  mammal: "Mamífer",
+  bird: "Ocell",
+  reptile: "Rèptil",
+  amphibian: "Amfibi",
+  insect: "Insecte",
+  fish: "Peix",
+  other: "Altre",
 };
 
 type CategoryStyle = {
@@ -155,6 +155,7 @@ export default function CollectionPage() {
   const [lockedMessage, setLockedMessage] = useState<string | null>(null);
   const [undiscoveredVisibleCount, setUndiscoveredVisibleCount] = useState(UNDISCOVERED_PAGE_SIZE);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCollection = async () => {
@@ -162,7 +163,7 @@ export default function CollectionPage() {
 
       if (!supabase) {
         setMessage(
-          "No encontramos la configuracion de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+          "No hem trobat la configuració de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL i NEXT_PUBLIC_SUPABASE_ANON_KEY.",
         );
         setSpecies([]);
         setDiscoveredSpeciesIds([]);
@@ -184,7 +185,7 @@ export default function CollectionPage() {
         .order("common_name", { ascending: true });
 
       if (speciesError) {
-        setMessage("No pudimos cargar el catalogo ahora mismo.");
+        setMessage("Ara mateix no hem pogut carregar el catàleg.");
         setSpecies([]);
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
@@ -198,7 +199,7 @@ export default function CollectionPage() {
       setSpecies(loadedSpecies);
 
       if (loadedSpecies.length === 0) {
-        setMessage("Aun no hay especies cargadas en el catalogo.");
+        setMessage("Encara no hi ha espècies carregades al catàleg.");
       }
 
       if (!user) {
@@ -216,7 +217,7 @@ export default function CollectionPage() {
         .eq("user_id", user.id);
 
       if (sightingsError) {
-        setMessage("No pudimos cargar tus avistamientos por ahora.");
+        setMessage("Ara mateix no hem pogut carregar els teus albiraments.");
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
         setLatestSightingBySpeciesId({});
@@ -279,6 +280,32 @@ export default function CollectionPage() {
       loadCollection();
     }
   }, [authLoading, user]);
+
+  useEffect(() => {
+    const loadProfileAvatar = async () => {
+      if (!user) {
+        setProfileAvatarUrl(null);
+        return;
+      }
+
+      const supabase = createSupabaseBrowserClient();
+
+      if (!supabase) {
+        setProfileAvatarUrl(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .maybeSingle<{ avatar_url: string | null }>();
+
+      setProfileAvatarUrl(data?.avatar_url ?? null);
+    };
+
+    loadProfileAvatar();
+  }, [user]);
 
   const discoveredCount = useMemo(
     () => species.filter((item) => discoveredSpeciesIds.includes(item.id)).length,
@@ -361,7 +388,7 @@ export default function CollectionPage() {
     const locationText = latestSighting?.location_name
       ? `📍 ${latestSighting.location_name}`
       : latestSighting?.latitude != null && latestSighting?.longitude != null
-        ? "📍 Ubicacion guardada"
+        ? "📍 Ubicació desada"
         : null;
 
     return (
@@ -391,7 +418,7 @@ export default function CollectionPage() {
         <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
           <h3 className="text-sm font-semibold text-forest-dark">{speciesItem.common_name}</h3>
           <p className="mt-1 text-xs italic text-[#5c6f64]">
-            {speciesItem.scientific_name ?? "Sin nombre cientifico"}
+            {speciesItem.scientific_name ?? "Sense nom científic"}
           </p>
           {locationText ? (
             <p className="mt-1 truncate text-[11px] text-forest-soft">{locationText}</p>
@@ -422,12 +449,12 @@ export default function CollectionPage() {
               >
                 TOVA
               </Link>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">Mi colección</h1>
-              <p className="mt-1 text-sm text-forest">Tu álbum de descubrimientos</p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">La meva col·lecció</h1>
+              <p className="mt-1 text-sm text-forest">El teu àlbum de descobriments</p>
 
               <div className="mt-4">
                 <p className="text-sm font-medium text-forest-dark">
-                  Has descubierto {discoveredCount} de {species.length}
+                  Has descobert {discoveredCount} de {species.length} animals
                 </p>
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#d9cfbb]">
                   <div
@@ -438,18 +465,37 @@ export default function CollectionPage() {
               </div>
 
               {!authLoading && !user ? (
-                <p className="mt-3 text-xs text-forest-soft">Entra para empezar tu colección.</p>
+                <p className="mt-3 text-xs text-forest-soft">Entra per començar la teva col·lecció.</p>
               ) : null}
             </div>
 
-            <Link
-              href="/trophies"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#c5d4c7] bg-[#fcfaf5] text-xl text-forest shadow-sm transition hover:bg-sand"
-              aria-label="Ir a trofeos"
-              title="Ver trofeos"
-            >
-              🏆
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/profile"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#c5d4c7] bg-[#fcfaf5] text-xl text-forest shadow-sm transition hover:bg-sand"
+                aria-label="Anar al perfil"
+                title="Veure perfil"
+              >
+                {profileAvatarUrl ? (
+                  <img
+                    src={profileAvatarUrl}
+                    alt="Avatar"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  "👤"
+                )}
+              </Link>
+
+              <Link
+                href="/trophies"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#c5d4c7] bg-[#fcfaf5] text-xl text-forest shadow-sm transition hover:bg-sand"
+                aria-label="Anar als trofeus"
+                title="Veure trofeus"
+              >
+                🏆
+              </Link>
+            </div>
           </div>
         </header>
 
@@ -457,19 +503,19 @@ export default function CollectionPage() {
 
         {loading ? (
           <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center sm:p-8">
-            <p className="text-sm text-forest-soft">Cargando colección...</p>
+            <p className="text-sm text-forest-soft">Carregant col·lecció...</p>
           </section>
         ) : null}
 
         {!loading && message ? (
           <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center sm:p-8">
-            <p className="text-base font-medium text-forest-dark">Catalogo no disponible</p>
+            <p className="text-base font-medium text-forest-dark">Catàleg no disponible</p>
             <p className="mt-2 text-sm text-forest-soft">{message}</p>
             <Link
               href="/capture"
               className="mt-5 inline-flex rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-sand"
             >
-              Ir a captura mock
+              Anar a la captura de prova
             </Link>
           </section>
         ) : null}
@@ -484,14 +530,14 @@ export default function CollectionPage() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-                Filtros
+                Filtres
               </h2>
               <div className="flex items-center gap-2">
                 <Link
                   href="/map"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sand-dark bg-white text-sm text-forest transition-colors hover:bg-sand-dark"
-                  aria-label="Ver recuerdos en el mapa"
-                  title="Ver recuerdos en el mapa"
+                  aria-label="Veure records al mapa"
+                  title="Veure records al mapa"
                 >
                   🗺️
                 </Link>
@@ -504,7 +550,7 @@ export default function CollectionPage() {
                       : "border-sand-dark bg-white text-forest hover:bg-sand-dark"
                   }`}
                 >
-                  <span>Filtros</span>
+                  <span>Filtres</span>
                   {selectedCategory !== "all" && (
                     <span className="rounded-full bg-white/30 px-1.5 py-0.5 text-[10px]">
                       {categoryOptions.find((o) => o.value === selectedCategory)?.label}
@@ -541,7 +587,7 @@ export default function CollectionPage() {
         {filteredRecentSpecies.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-              Descubrimientos recientes
+              Descobriments recents
             </h2>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -553,7 +599,7 @@ export default function CollectionPage() {
         {filteredUnlockedCollectionSpecies.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-              Tu colección
+              La teva col·lecció
             </h2>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -564,13 +610,13 @@ export default function CollectionPage() {
 
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-            Por descubrir
+            Per descobrir
           </h2>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleUndiscoveredSpecies.map((speciesItem) => {
               const cat = (speciesItem.category as SpeciesCategory) ?? "other";
-              const categoryLabel = categoryLabelMap[cat] ?? "Otro";
+              const categoryLabel = categoryLabelMap[cat] ?? "Altre";
               const categoryStyle = getCategoryStyle(cat);
               const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
               const lockedIcon = categoryLockedIcon[cat] ?? "❓";
@@ -579,7 +625,7 @@ export default function CollectionPage() {
                 <button
                   type="button"
                   key={speciesItem.id}
-                  onClick={() => setLockedMessage("Todavía no has descubierto este animal")}
+                  onClick={() => setLockedMessage("Encara no has descobert aquest animal")}
                   className={`flex min-h-[18rem] flex-col overflow-hidden rounded-lg border-2 bg-[#fbf8f2] text-left opacity-85 transition hover:-translate-y-0.5 hover:shadow-sm ${categoryStyle.cardBorder}`}
                 >
                   <div className="h-2 w-full" style={{ backgroundColor: categoryStyle.categoryColor }} />
@@ -594,7 +640,7 @@ export default function CollectionPage() {
                     <h3 className="text-sm font-semibold text-forest-dark">
                       {speciesItem.common_name}
                     </h3>
-                    <p className="mt-1 text-xs text-forest-soft">Por descubrir</p>
+                    <p className="mt-1 text-xs text-forest-soft">Per descobrir</p>
                     <div className="mt-auto flex items-end justify-between gap-2 pt-3">
                       <span
                         className={`inline-flex w-fit rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${categoryStyle.badgeBg} ${categoryStyle.badgeText}`}
@@ -618,7 +664,7 @@ export default function CollectionPage() {
                 }
                 className="rounded-full border border-sand-dark bg-sand px-4 py-2 text-sm font-medium text-forest"
               >
-                Cargar 20 mas
+                Carregar 20 més
               </button>
             </div>
           ) : null}
@@ -626,7 +672,7 @@ export default function CollectionPage() {
 
         {!loading && !message && displayedTotal === 0 ? (
           <section className="rounded-2xl border border-sand-dark bg-sand p-4 text-center">
-            <p className="text-sm text-forest-soft">No hay especies en esta categoría.</p>
+            <p className="text-sm text-forest-soft">No hi ha espècies en aquesta categoria.</p>
           </section>
         ) : null}
 
@@ -636,7 +682,7 @@ export default function CollectionPage() {
         href="/capture"
         className="fixed bottom-5 left-1/2 z-20 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2 rounded-full bg-[#2F5D50] px-6 py-4 text-center text-sm font-semibold text-[#F4F1E8] shadow-[0_18px_34px_-18px_rgba(26,42,34,0.95)]"
       >
-        Descubrir un animal
+        Descobrir un animal
       </Link>
 
     </main>

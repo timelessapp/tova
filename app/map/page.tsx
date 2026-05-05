@@ -26,7 +26,7 @@ const SightingsMap = dynamic(() => import("@/components/SightingsMap"), {
 });
 
 function getLocationLabel(locationName: string | null) {
-  return locationName ? locationName : "Ubicacion guardada";
+  return locationName ? locationName : "Ubicació desada";
 }
 
 export default function MapPage() {
@@ -40,7 +40,7 @@ export default function MapPage() {
       const supabase = createSupabaseBrowserClient();
 
       if (!supabase) {
-        setMessage("No encontramos la configuracion de Supabase.");
+        setMessage("No hem trobat la configuració de Supabase.");
         setSightings([]);
         setLoading(false);
 
@@ -68,7 +68,7 @@ export default function MapPage() {
         .order("seen_at", { ascending: false });
 
       if (error) {
-        setMessage("No pudimos cargar tus avistamientos en el mapa.");
+        setMessage("No hem pogut carregar els teus albiraments al mapa.");
         setSightings([]);
         setLoading(false);
 
@@ -121,23 +121,23 @@ export default function MapPage() {
         <header className="flex items-center justify-between rounded-2xl border border-sand-dark bg-sand p-5 sm:p-6">
           <div>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-forest-dark">
-              Mapa de descubrimientos
+              Mapa de descobriments
             </h1>
             <p className="mt-2 text-sm text-forest-soft">
-              Los animales que has encontrado, colocados en tu territorio.
+              Els animals que has trobat, situats al teu territori.
             </p>
           </div>
           <Link
             href="/collection"
             className="rounded-full border border-sand-dark bg-sand px-3 py-1.5 text-xs font-medium text-forest"
           >
-            Mi colección
+            La meva col·lecció
           </Link>
         </header>
 
         {loading ? (
           <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
-            <p className="text-sm text-forest-soft">Cargando mapa...</p>
+            <p className="text-sm text-forest-soft">Carregant mapa...</p>
           </section>
         ) : null}
 
@@ -149,13 +149,13 @@ export default function MapPage() {
 
         {!loading && !user ? (
           <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center">
-            <p className="text-sm text-forest-soft">Entra para ver tus avistamientos en el mapa.</p>
+            <p className="text-sm text-forest-soft">Entra per veure els teus albiraments al mapa.</p>
           </section>
         ) : null}
 
         {!loading && user && mapPoints.length === 0 ? (
           <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
-            <p className="text-sm text-forest-soft">Aun no tienes descubrimientos con ubicacion.</p>
+            <p className="text-sm text-forest-soft">Encara no tens descobriments amb ubicació.</p>
           </section>
         ) : null}
 
@@ -167,7 +167,7 @@ export default function MapPage() {
 
             <div className="mt-4 space-y-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-                Descubrimientos en este mapa
+                Descobriments en aquest mapa
               </h2>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {mapPoints.map((point) => (
@@ -194,7 +194,7 @@ export default function MapPage() {
                     </div>
 
                     <p className="shrink-0 text-[11px] text-forest-soft">
-                      {new Date(point.seenAt).toLocaleDateString("es-ES", {
+                      {new Date(point.seenAt).toLocaleDateString("ca-ES", {
                         day: "2-digit",
                         month: "short",
                       })}

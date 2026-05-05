@@ -79,7 +79,7 @@ type AchievementsPanelProps = {
 export default function AchievementsPanel({ trophies, onOpenDetail }: AchievementsPanelProps) {
   if (trophies.length === 0) {
     return (
-      <p className="text-sm text-forest-soft">Aun no tienes logros desbloqueados.</p>
+      <p className="text-sm text-forest-soft">Encara no tens trofeus desbloquejats.</p>
     );
   }
 
@@ -111,7 +111,7 @@ export default function AchievementsPanel({ trophies, onOpenDetail }: Achievemen
                 </p>
                 <div className="mt-auto pt-2">
                   <span className={`inline-flex w-fit rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${style.badgeBg} ${style.badgeText}`}>
-                    Trofeo
+                    Trofeu
                   </span>
                 </div>
               </div>

@@ -48,6 +48,27 @@ export type UserAchievement = {
   source: string;
 };
 
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export type AiIdentificationLog = {
+  id: string;
+  user_id: string | null;
+  image_url: string | null;
+  status: string;
+  best_common_name: string | null;
+  best_scientific_name: string | null;
+  best_confidence: number | null;
+  internal_suggestions: Json | null;
+  error_message: string | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -55,16 +76,22 @@ export type Database = {
         Row: {
           id: string;
           full_name: string | null;
+          avatar_url: string | null;
+          language: "ca" | "es";
           created_at: string;
         };
         Insert: {
           id: string;
           full_name?: string | null;
+          avatar_url?: string | null;
+          language?: "ca" | "es";
           created_at?: string;
         };
         Update: {
           id?: string;
           full_name?: string | null;
+          avatar_url?: string | null;
+          language?: "ca" | "es";
           created_at?: string;
         };
         Relationships: [
@@ -132,6 +159,31 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_achievements_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ai_identification_logs: {
+        Row: AiIdentificationLog;
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          image_url?: string | null;
+          status: string;
+          best_common_name?: string | null;
+          best_scientific_name?: string | null;
+          best_confidence?: number | null;
+          internal_suggestions?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<AiIdentificationLog>;
+        Relationships: [
+          {
+            foreignKeyName: "ai_identification_logs_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "users";

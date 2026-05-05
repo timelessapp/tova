@@ -16,7 +16,7 @@ export default function AuthPage() {
 
     if (!supabase) {
       setStatusMessage(
-        "Falta configurar Supabase correctamente para enviar el magic link.",
+        "Cal configurar Supabase correctament per enviar el magic link.",
       );
 
       return;
@@ -35,13 +35,13 @@ export default function AuthPage() {
     });
 
     if (error) {
-      setStatusMessage("No se pudo enviar el enlace. Revisa el email e intentalo.");
+      setStatusMessage("No s'ha pogut enviar l'enllaç. Revisa el correu i torna-ho a provar.");
       setSubmitting(false);
 
       return;
     }
 
-    setStatusMessage("Te enviamos un enlace magico a tu correo.");
+    setStatusMessage("T'hem enviat un enllaç màgic al teu correu.");
     setSubmitting(false);
   };
 
@@ -52,12 +52,12 @@ export default function AuthPage() {
           href="/"
           className="text-xs font-medium text-[#5e7367] underline-offset-4 hover:underline"
         >
-          Volver
+          Tornar
         </Link>
 
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">Entrar</h1>
         <p className="mt-2 text-sm text-forest-soft">
-          Usa tu email para recibir un magic link. No necesitas contrasena.
+          Fes servir el teu correu per rebre un magic link. No necessites contrasenya.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3">
@@ -80,7 +80,7 @@ export default function AuthPage() {
             disabled={submitting}
             className="mt-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-sand disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {submitting ? "Enviando..." : "Enviar magic link"}
+            {submitting ? "Enviant..." : "Enviar magic link"}
           </button>
         </form>
 

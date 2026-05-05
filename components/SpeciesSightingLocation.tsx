@@ -21,14 +21,14 @@ function formatLocation(location: SightingLocation | null, fallbackLocationName?
   }
 
   if (location?.latitude != null && location?.longitude != null) {
-    return "Ubicacion guardada";
+    return "Ubicació desada";
   }
 
   if (fallbackLocationName) {
     return fallbackLocationName;
   }
 
-  return "Aun sin avistamientos guardados.";
+  return "Encara no hi ha albiraments desats.";
 }
 
 export default function SpeciesSightingLocation({
@@ -90,11 +90,11 @@ export default function SpeciesSightingLocation({
   return (
     <div className="mt-4 rounded-2xl border border-sand-dark bg-white p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
-        Donde se vio
+        On es va veure
       </p>
       <p className="mt-1 text-sm text-forest-dark">
         {loading || loadingLocation
-          ? "Cargando ubicacion..."
+          ? "Carregant ubicació..."
           : formatLocation(location, fallbackLocationName)}
       </p>
     </div>

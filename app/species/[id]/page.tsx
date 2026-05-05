@@ -47,15 +47,15 @@ function mapDbSpeciesToDisplay(species: Species): DisplaySpecies {
   return {
     id: species.id,
     commonName: species.common_name,
-    scientificName: species.scientific_name ?? "Sin nombre cientifico",
+    scientificName: species.scientific_name ?? "Sense nom científic",
     imageEmoji: "🐾",
     imageUrl: species.image_url,
-    shortDescription: species.description ?? "Descripcion pendiente.",
-    habitat: species.habitat ?? "Habitat por completar.",
+    shortDescription: species.description ?? "Descripció pendent.",
+    habitat: species.habitat ?? "Hàbitat pendent d'afegir.",
     curiosities:
       species.curiosities && species.curiosities.length > 0
         ? species.curiosities
-        : ["Aun no hay curiosidades registradas para esta especie."],
+        : ["Encara no hi ha curiositats registrades per a aquesta espècie."],
     quickFacts: buildQuickFacts(species),
   };
 }
@@ -111,7 +111,7 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
           href="/collection"
           className="self-start rounded-full border border-[#ced8c5] bg-[#f5f7ef] px-4 py-2 text-sm font-medium text-[#385443]"
         >
-          Volver
+          Tornar
         </Link>
 
         <section className="rounded-3xl border border-[#d8dfcf] bg-[#fbfbf8] p-6">
@@ -143,7 +143,7 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
           {species.quickFacts.length > 0 ? (
             <div className="mt-5">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#597061]">
-                Datos rápidos
+                Dades ràpides
               </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {species.quickFacts.map((fact) => (
@@ -166,14 +166,14 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
 
           <div className="mt-5 rounded-2xl border border-[#d8e1d0] bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
-              Habitat
+              Hàbitat
             </p>
             <p className="mt-1 text-sm text-[#34473d]">{species.habitat}</p>
           </div>
 
           <div className="mt-4 rounded-2xl border border-[#d8e1d0] bg-white p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
-              Curiosidades
+              Curiositats
             </p>
             <ul className="mt-2 space-y-2 text-sm text-[#34473d]">
               {species.curiosities.slice(0, 3).map((curiosity) => (

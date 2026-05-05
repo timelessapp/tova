@@ -75,3 +75,29 @@ export function createSupabaseBrowserClient() {
     return null;
   }
 }
+
+export function createSupabaseRouteClient(accessToken?: string) {
+  const config = getNormalizedSupabaseConfig();
+
+  if (!config) {
+    return null;
+  }
+
+  try {
+    return createClient<Database>(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      global: accessToken
+        ? {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        : undefined,
+    });
+  } catch {
+    return null;
+  }
+}

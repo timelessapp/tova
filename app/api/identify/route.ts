@@ -1,7 +1,11 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { createSupabaseRouteClient } from "@/lib/supabaseClient";
+import type { Database, Json } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+const AI_IDENTIFICATION_BUCKET = "ai-identification-images";
 
 interface SpeciesCandidate {
   common_name: string;
@@ -20,6 +24,16 @@ interface IdentifyResponse {
   suggestion: IdentifySuggestion | null;
 }
 
+interface IdentifyLogInput {
+  accessToken?: string;
+  userId?: string | null;
+  imageUrl?: string | null;
+  status: "identified" | "uncertain" | "error";
+  bestSuggestion?: IdentifySuggestion | null;
+  internalSuggestions?: IdentifySuggestion[] | null;
+  errorMessage?: string | null;
+}
+
 interface IdentifyBody {
   image?: string;
   speciesList?: SpeciesCandidate[];
@@ -35,7 +49,7 @@ const USER_PROMPT =
 
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const MAX_SPECIES_COUNT = 250;
-const IDENTIFY_CONFIDENCE_THRESHOLD = 0.7;
+const IDENTIFY_CONFIDENCE_THRESHOLD = 0.85;
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
@@ -58,6 +72,133 @@ function asDataUrl(imageValue: string): string {
   }
 
   return `data:image/jpeg;base64,${imageValue}`;
+}
+
+function getAccessTokenFromRequest(request: Request): string | null {
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+
+  if (!authorization.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+
+  const token = authorization.slice(7).trim();
+  return token.length > 0 ? token : null;
+}
+
+function parseDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer } | null {
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    mimeType: match[1],
+    buffer: Buffer.from(match[2], "base64"),
+  };
+}
+
+function extensionFromMimeType(mimeType: string): string {
+  switch (mimeType) {
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    default:
+      return "jpg";
+  }
+}
+
+async function resolveAuthenticatedUserId(accessToken: string | null): Promise<{
+  accessToken: string | undefined;
+  userId: string | null;
+}> {
+  if (!accessToken) {
+    return { accessToken: undefined, userId: null };
+  }
+
+  const supabase = createSupabaseRouteClient();
+
+  if (!supabase) {
+    return { accessToken: undefined, userId: null };
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(accessToken);
+
+  if (error || !user) {
+    return { accessToken: undefined, userId: null };
+  }
+
+  return {
+    accessToken,
+    userId: user.id,
+  };
+}
+
+async function uploadIdentifyImage(options: {
+  imageDataUrl: string;
+  accessToken?: string;
+  userId?: string | null;
+}): Promise<string | null> {
+  const parsedImage = parseDataUrl(options.imageDataUrl);
+
+  if (!parsedImage) {
+    return null;
+  }
+
+  const supabase = createSupabaseRouteClient(options.accessToken);
+
+  if (!supabase) {
+    return null;
+  }
+
+  const folder = options.userId ?? "anon";
+  const extension = extensionFromMimeType(parsedImage.mimeType);
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(AI_IDENTIFICATION_BUCKET)
+    .upload(path, parsedImage.buffer, {
+      contentType: parsedImage.mimeType,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    console.error("Failed to upload AI identification image", uploadError);
+    return null;
+  }
+
+  const { data } = supabase.storage.from(AI_IDENTIFICATION_BUCKET).getPublicUrl(path);
+
+  return data.publicUrl || null;
+}
+
+async function writeIdentifyLog(input: IdentifyLogInput): Promise<void> {
+  const supabase = createSupabaseRouteClient(input.accessToken);
+
+  if (!supabase) {
+    return;
+  }
+
+  const logRow: Database["public"]["Tables"]["ai_identification_logs"]["Insert"] = {
+    user_id: input.userId ?? null,
+    image_url: input.imageUrl ?? null,
+    status: input.status,
+    best_common_name: input.bestSuggestion?.common_name ?? null,
+    best_scientific_name: input.bestSuggestion?.scientific_name ?? null,
+    best_confidence: input.bestSuggestion?.confidence ?? null,
+    internal_suggestions: (input.internalSuggestions ?? null) as Json,
+    error_message: input.errorMessage ?? null,
+  };
+
+  const { error } = await supabase.from("ai_identification_logs").insert(logRow);
+
+  if (error) {
+    console.error("Failed to write AI identification log", error);
+  }
 }
 
 function toValidSuggestions(raw: unknown): IdentifySuggestion[] {
@@ -137,31 +278,67 @@ async function parseRequestBody(request: Request): Promise<{
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "La clave de OpenAI no esta configurada en el servidor." },
-      { status: 500 },
-    );
-  }
-
+  const resolvedAuth = await resolveAuthenticatedUserId(getAccessTokenFromRequest(request));
   let imageDataUrl: string | null = null;
   let speciesList: SpeciesCandidate[] = [];
+  let imageUrl: string | null = null;
 
   try {
     const parsed = await parseRequestBody(request);
     imageDataUrl = parsed.imageDataUrl;
     speciesList = parsed.speciesList;
   } catch {
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      status: "error",
+      errorMessage: "Body invalido.",
+    });
     return NextResponse.json({ error: "Body invalido." }, { status: 400 });
   }
 
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    if (imageDataUrl?.startsWith("data:image/")) {
+      imageUrl = await uploadIdentifyImage({
+        imageDataUrl,
+        accessToken: resolvedAuth.accessToken,
+        userId: resolvedAuth.userId,
+      });
+    }
+
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      imageUrl,
+      status: "error",
+      errorMessage: "La clave de OpenAI no esta configurada en el servidor.",
+    });
+
+    return NextResponse.json(
+      { error: "La clave de OpenAI no esta configurada en el servidor." },
+      { status: 500 },
+    );
+  }
+
   if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      status: "error",
+      errorMessage: "Debes enviar una imagen valida.",
+    });
     return NextResponse.json({ error: "Debes enviar una imagen valida." }, { status: 400 });
   }
 
   if (bytesFromDataUrl(imageDataUrl) > MAX_IMAGE_BYTES) {
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      status: "error",
+      errorMessage: "La imagen es demasiado grande. Reduce resolucion o compresion antes de enviarla.",
+    });
     return NextResponse.json(
       {
         error:
@@ -171,7 +348,20 @@ export async function POST(request: Request) {
     );
   }
 
+  imageUrl = await uploadIdentifyImage({
+    imageDataUrl,
+    accessToken: resolvedAuth.accessToken,
+    userId: resolvedAuth.userId,
+  });
+
   if (!Array.isArray(speciesList) || speciesList.length === 0) {
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      imageUrl,
+      status: "error",
+      errorMessage: "Debes enviar al menos una especie candidata.",
+    });
     return NextResponse.json(
       { error: "Debes enviar al menos una especie candidata." },
       { status: 400 },
@@ -179,6 +369,13 @@ export async function POST(request: Request) {
   }
 
   if (speciesList.length > MAX_SPECIES_COUNT) {
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      imageUrl,
+      status: "error",
+      errorMessage: "Demasiadas especies en speciesList. Envia una lista reducida para mejorar coste y latencia.",
+    });
     return NextResponse.json(
       {
         error:
@@ -188,6 +385,13 @@ export async function POST(request: Request) {
     );
   }
 
+      await writeIdentifyLog({
+        accessToken: resolvedAuth.accessToken,
+        userId: resolvedAuth.userId,
+        imageUrl,
+        status: "error",
+        errorMessage: "Lista de especies candidatas vacia.",
+      });
   const sanitizedCandidates = speciesList
     .map((candidate) => ({
       common_name: candidate.common_name?.trim() ?? "",
@@ -271,6 +475,14 @@ export async function POST(request: Request) {
     const rawText = completion.choices[0]?.message?.content ?? "";
 
     if (!rawText) {
+      await writeIdentifyLog({
+        accessToken: resolvedAuth.accessToken,
+        userId: resolvedAuth.userId,
+        imageUrl,
+        status: "uncertain",
+        internalSuggestions: [],
+      });
+
       return NextResponse.json({
         status: "uncertain",
         suggestion: null,
@@ -282,6 +494,13 @@ export async function POST(request: Request) {
     try {
       parsed = JSON.parse(rawText) as unknown;
     } catch {
+      await writeIdentifyLog({
+        accessToken: resolvedAuth.accessToken,
+        userId: resolvedAuth.userId,
+        imageUrl,
+        status: "error",
+        errorMessage: "Respuesta invalida del modelo.",
+      });
       return NextResponse.json({ error: "Respuesta invalida del modelo." }, { status: 502 });
     }
 
@@ -297,17 +516,43 @@ export async function POST(request: Request) {
     )[0];
 
     if (!bestSuggestion || bestSuggestion.confidence < IDENTIFY_CONFIDENCE_THRESHOLD) {
+      await writeIdentifyLog({
+        accessToken: resolvedAuth.accessToken,
+        userId: resolvedAuth.userId,
+        imageUrl,
+        status: "uncertain",
+        bestSuggestion,
+        internalSuggestions: suggestions,
+      });
+
       return NextResponse.json({
         status: "uncertain",
         suggestion: null,
       } satisfies IdentifyResponse);
     }
 
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      imageUrl,
+      status: "identified",
+      bestSuggestion,
+      internalSuggestions: suggestions,
+    });
+
     return NextResponse.json({
       status: "identified",
       suggestion: bestSuggestion,
     } satisfies IdentifyResponse);
   } catch {
+    await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      imageUrl,
+      status: "error",
+      errorMessage: "Error al consultar OpenAI para identificar la imagen.",
+    });
+
     return NextResponse.json(
       { error: "Error al consultar OpenAI para identificar la imagen." },
       { status: 500 },

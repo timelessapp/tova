@@ -9,7 +9,7 @@ export default function AuthButton() {
   if (loading) {
     return (
       <span className="rounded-full border border-sand-dark bg-sand px-3 py-1 text-xs font-medium text-[#607468]">
-        Cargando...
+        Carregant...
       </span>
     );
   }
@@ -17,7 +17,7 @@ export default function AuthButton() {
   if (user) {
     return (
       <span className="rounded-full border border-sand-dark bg-sand-dark px-3 py-1 text-xs font-medium text-forest">
-        Sesion activa
+        Sessió activa
       </span>
     );
   }

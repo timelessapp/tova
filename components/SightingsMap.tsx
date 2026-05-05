@@ -51,10 +51,10 @@ function formatSeenAt(value: string): string {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Fecha no disponible";
+    return "Data no disponible";
   }
 
-  return new Intl.DateTimeFormat("es-ES", {
+  return new Intl.DateTimeFormat("ca-ES", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -83,16 +83,16 @@ export default function SightingsMap({ points, initialCenter }: SightingsMapProp
               <div className="p-3">
                 <p className="text-sm font-semibold text-forest-dark">{point.commonName}</p>
                 <p className="truncate text-xs italic text-forest-soft">
-                  {point.scientificName ?? "Sin nombre cientifico"}
+                  {point.scientificName ?? "Sense nom científic"}
                 </p>
                 <p className="mt-2 text-xs text-forest-soft">{formatSeenAt(point.seenAt)}</p>
-                <p className="truncate text-xs text-forest-soft">📍 {point.locationName ?? "Ubicacion guardada"}</p>
+                <p className="truncate text-xs text-forest-soft">📍 {point.locationName ?? "Ubicació desada"}</p>
                 {point.speciesId ? (
                   <a
                     href={`/species/${point.speciesId}`}
                     className="mt-2 inline-flex rounded-full border border-sand-dark bg-white px-2.5 py-1 text-[11px] font-medium text-forest"
                   >
-                    Ver ficha
+                    Veure fitxa
                   </a>
                 ) : null}
               </div>

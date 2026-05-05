@@ -108,13 +108,13 @@ type CardStyle = {
 };
 
 const categoryLabelMap: Record<SpeciesCategory, string> = {
-  mammal: "Mamífero",
-  bird: "Ave",
-  reptile: "Reptil",
-  amphibian: "Anfibio",
-  insect: "Insecto",
-  fish: "Pez",
-  other: "Otro",
+  mammal: "Mamífer",
+  bird: "Ocell",
+  reptile: "Rèptil",
+  amphibian: "Amfibi",
+  insect: "Insecte",
+  fish: "Peix",
+  other: "Altre",
 };
 
 function getCategoryStyle(category: SpeciesCategory): CardStyle {
@@ -238,23 +238,23 @@ export default function DiscoveryModal({
                 onClick={() => setDescriptionOpen((value) => !value)}
                 className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-white/95 transition hover:bg-white/20"
                 aria-expanded={descriptionOpen}
-                aria-label="Mostrar descripcion de la especie desbloqueada"
+                aria-label="Mostrar la descripció de l'espècie desbloquejada"
               >
-                <span>✨ Nueva especie desbloqueada</span>
+                <span>✨ Nova espècie desbloquejada</span>
                 <span className="text-[10px] normal-case tracking-normal text-white/85">
-                  {descriptionOpen ? "Ocultar" : "Ver descripcion"}
+                  {descriptionOpen ? "Amagar" : "Veure descripció"}
                 </span>
               </button>
             ) : (
               <p className="text-xs font-semibold uppercase tracking-widest text-white/90">
-                📍 Lo has vuelto a encontrar
+                📍 L'has tornat a trobar
               </p>
             )}
           </div>
 
           {isNew && descriptionOpen ? (
             <div className="mb-3 rounded-xl border border-white/35 bg-white/12 px-3 py-2 text-left text-xs text-white/95 backdrop-blur-sm">
-              {description?.trim() || "Descripcion no disponible para esta especie."}
+              {description?.trim() || "Descripció no disponible per a aquesta espècie."}
             </div>
           ) : null}
 
@@ -324,7 +324,7 @@ export default function DiscoveryModal({
               ) : null}
 
               {mode === "repeat" ? (
-                <p className="mt-3 text-xs text-forest-soft">Cada encuentro suma a tu historia natural.</p>
+                <p className="mt-3 text-xs text-forest-soft">Cada trobada suma a la teva història natural.</p>
               ) : null}
 
               <div className="mt-3">
@@ -346,7 +346,7 @@ export default function DiscoveryModal({
               animation:  ctaVisible ? "cta-rise 0.4s ease forwards" : undefined,
             }}
           >
-            Seguir explorando
+            Continuar explorant
           </button>
 
         </div>

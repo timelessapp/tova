@@ -12,16 +12,16 @@ type AchievementDetailModalProps = {
 
 function formatUnlockedAt(value: string | null): string {
   if (!value) {
-    return "Fecha no disponible";
+    return "Data no disponible";
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "Fecha no disponible";
+    return "Data no disponible";
   }
 
-  return new Intl.DateTimeFormat("es-ES", {
+  return new Intl.DateTimeFormat("ca-ES", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -46,7 +46,7 @@ export default function AchievementDetailModal({
       style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
       role="dialog"
       aria-modal="true"
-      aria-label="Detalle del trofeo"
+      aria-label="Detall del trofeu"
       onClick={onClose}
     >
       <div
@@ -55,18 +55,18 @@ export default function AchievementDetailModal({
       >
         <p className="text-5xl leading-none">{visual.icon}</p>
         <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-forest-soft">
-          Trofeo desbloqueado
+          Trofeu desbloquejat
         </p>
         <h3 className="mt-1 text-xl font-semibold text-forest-dark">{visual.label}</h3>
         <p className="mt-2 text-sm text-forest-soft">{visual.description}</p>
-        <p className="mt-4 text-xs text-forest-soft">Desbloqueado: {formatUnlockedAt(unlockedAt)}</p>
+        <p className="mt-4 text-xs text-forest-soft">Desbloquejat: {formatUnlockedAt(unlockedAt)}</p>
 
         <button
           type="button"
           onClick={onClose}
           className="mt-5 w-full rounded-full bg-forest px-4 py-2.5 text-sm font-semibold text-sand"
         >
-          Cerrar
+          Tancar
         </button>
       </div>
     </div>

@@ -35,7 +35,7 @@ export default function TrophiesPage() {
       const supabase = createSupabaseBrowserClient();
 
       if (!supabase) {
-        setMessage("No encontramos la configuracion de Supabase.");
+        setMessage("No hem trobat la configuració de Supabase.");
         setLoading(false);
         return;
       }
@@ -45,7 +45,7 @@ export default function TrophiesPage() {
         return;
       }
 
-      // Carga avistamientos para detectar logros alcanzados
+      // Càrrega d'albiraments per detectar trofeus assolits
       const [{ data: sightingsData }, { data: speciesData }] = await Promise.all([
         supabase.from("sightings").select("species_id").eq("user_id", user.id),
         supabase
@@ -145,20 +145,20 @@ export default function TrophiesPage() {
             href="/collection"
             className="text-xs font-medium text-[#5e7367] underline-offset-4 hover:underline"
           >
-            ← Mi colección
+            ← La meva col·lecció
           </Link>
           <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-forest-soft">TOVA</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">Trofeos</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">Trofeus</h1>
           <p className="mt-2 text-sm text-forest">
             {trophies.length === 0 && !loading
-              ? "Aún no has desbloqueado ningún trofeo."
-              : `${trophies.length} trofeo${trophies.length === 1 ? "" : "s"} desbloqueado${trophies.length === 1 ? "" : "s"}.`}
+              ? "Encara no has desbloquejat cap trofeu."
+              : `${trophies.length} trofeu${trophies.length === 1 ? "" : "s"} desbloquejat${trophies.length === 1 ? "" : "s"}.`}
           </p>
         </header>
 
         {loading ? (
           <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
-            <p className="text-sm text-forest-soft">Cargando trofeos...</p>
+            <p className="text-sm text-forest-soft">Carregant trofeus...</p>
           </section>
         ) : null}
 
@@ -170,7 +170,7 @@ export default function TrophiesPage() {
 
         {!loading && !authLoading && !user ? (
           <section className="rounded-2xl border border-sand-dark bg-sand p-6 text-center">
-            <p className="text-sm text-forest-soft">Entra para ver tus trofeos.</p>
+            <p className="text-sm text-forest-soft">Entra per veure els teus trofeus.</p>
             <Link
               href="/auth"
               className="mt-4 inline-flex rounded-full bg-[#2F5D50] px-5 py-2.5 text-sm font-semibold text-[#F4F1E8]"
@@ -189,7 +189,7 @@ export default function TrophiesPage() {
         href="/capture"
         className="fixed bottom-5 left-1/2 z-20 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2 rounded-full bg-[#2F5D50] px-6 py-4 text-center text-sm font-semibold text-[#F4F1E8] shadow-[0_18px_34px_-18px_rgba(26,42,34,0.95)]"
       >
-        Capturar nuevo descubrimiento
+        Descobrir un animal
       </Link>
 
       <AchievementDetailModal

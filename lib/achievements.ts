@@ -19,13 +19,13 @@ export type AchievementVisual = {
 };
 
 const categoryLabelMap: Record<SpeciesCategory, string> = {
-  mammal: "mamífero",
-  bird: "ave",
-  reptile: "reptil",
-  amphibian: "anfibio",
-  insect: "insecto",
-  fish: "pez",
-  other: "otro",
+  mammal: "mamífer",
+  bird: "ocell",
+  reptile: "rèptil",
+  amphibian: "amfibi",
+  insect: "insecte",
+  fish: "peix",
+  other: "altre",
 };
 
 const knownCategories = new Set<SpeciesCategory>([
@@ -78,46 +78,46 @@ export function buildReachedAchievementKeys({
 
 export function achievementKeyToLabel(key: AchievementKey): string {
   if (key === "first_discovery") {
-    return "Tu primer hallazgo";
+    return "La teva primera troballa";
   }
 
   if (key === "five_species") {
-    return "Ya reuniste cinco especies";
+    return "Ja has reunit cinc espècies";
   }
 
   if (key === "ten_species") {
-    return "Diez especies, gran camino";
+    return "Deu espècies, gran camí";
   }
 
   if (key.startsWith("first_category_")) {
     const category = key.replace("first_category_", "") as SpeciesCategory;
     const label = categoryLabelMap[category] ?? "animal";
-    return `Primer paso en ${label}`;
+    return `Primer pas en ${label}`;
   }
 
-  return "Logro desbloqueado";
+  return "Trofeu desbloquejat";
 }
 
 export function achievementKeyToDescription(key: AchievementKey): string {
   if (key === "first_discovery") {
-    return "Descubriste tu primera especie en TOVA.";
+    return "Has descobert la teva primera espècie a TOVA.";
   }
 
   if (key === "five_species") {
-    return "Acumulaste cinco especies distintas en tu colección.";
+    return "Has acumulat cinc espècies diferents a la teva col·lecció.";
   }
 
   if (key === "ten_species") {
-    return "Ya registraste diez especies diferentes en tu album.";
+    return "Ja has registrat deu espècies diferents al teu àlbum.";
   }
 
   if (key.startsWith("first_category_")) {
     const category = key.replace("first_category_", "") as SpeciesCategory;
     const label = categoryLabelMap[category] ?? "animal";
-    return `Conseguiste tu primer avistamiento dentro de ${label}.`;
+    return `Has aconseguit el teu primer albirament dins de ${label}.`;
   }
 
-  return "Has conseguido un nuevo logro naturalista.";
+  return "Has aconseguit un nou trofeu naturalista.";
 }
 
 export function achievementKeyToIcon(key: AchievementKey): string {
