@@ -10,20 +10,33 @@ export type SpeciesCategory =
 export type Species = {
   id: string;
   common_name: string;
+  common_name_ca: string | null;
   scientific_name: string | null;
   category: SpeciesCategory | string;
   description: string | null;
+  description_ca: string | null;
+  description_es: string | null;
   habitat: string | null;
+  habitat_ca: string | null;
+  habitat_es: string | null;
   curiosities: string[] | null;
+  curiosities_ca: string[] | null;
+  curiosities_es: string[] | null;
   image_url: string | null;
   is_active: boolean;
   created_at: string;
   size_range: string | null;
+  size_range_ca: string | null;
   weight_range: string | null;
+  weight_range_ca: string | null;
   lifespan: string | null;
+  lifespan_ca: string | null;
   diet: string | null;
+  diet_ca: string | null;
   activity: string | null;
+  activity_ca: string | null;
   conservation_status: string | null;
+  conservation_status_ca: string | null;
 };
 
 export type Sighting = {
@@ -64,7 +77,12 @@ export type AiIdentificationLog = {
   best_common_name: string | null;
   best_scientific_name: string | null;
   best_confidence: number | null;
+  species_count: number | null;
+  candidate_species_snapshot: Json | null;
+  uncertain_reason: string | null;
+  model_raw_response: Json | null;
   internal_suggestions: Json | null;
+  needs_species_review: boolean;
   error_message: string | null;
   created_at: string;
 };
@@ -176,7 +194,12 @@ export type Database = {
           best_common_name?: string | null;
           best_scientific_name?: string | null;
           best_confidence?: number | null;
+          species_count?: number | null;
+          candidate_species_snapshot?: Json | null;
+          uncertain_reason?: string | null;
+          model_raw_response?: Json | null;
           internal_suggestions?: Json | null;
+          needs_species_review?: boolean;
           error_message?: string | null;
           created_at?: string;
         };

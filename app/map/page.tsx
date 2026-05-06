@@ -3,7 +3,10 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { useProfileLanguage } from "@/hooks/useProfileLanguage";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getLocalizedCommonName } from "@/lib/getLocalizedCommonName";
+import { getLocalizedSpeciesText } from "@/lib/getLocalizedSpeciesText";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
 type MapSightingRow = {
@@ -15,9 +18,19 @@ type MapSightingRow = {
   longitude: number | null;
   species: {
     common_name: string;
+    common_name_ca: string | null;
     scientific_name: string | null;
     category: string | null;
     image_url: string | null;
+    description: string | null;
+    description_ca: string | null;
+    description_es: string | null;
+    habitat: string | null;
+    habitat_ca: string | null;
+    habitat_es: string | null;
+    curiosities: string[] | null;
+    curiosities_ca: string[] | null;
+    curiosities_es: string[] | null;
   } | null;
 };
 
@@ -31,6 +44,7 @@ function getLocationLabel(locationName: string | null) {
 
 export default function MapPage() {
   const { user, loading: authLoading } = useCurrentUser();
+  const { language: profileLanguage } = useProfileLanguage();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [sightings, setSightings] = useState<MapSightingRow[]>([]);
@@ -60,7 +74,7 @@ export default function MapPage() {
       const { data, error } = await supabase
         .from("sightings")
         .select(
-          "id, species_id, seen_at, location_name, latitude, longitude, species:species_id(common_name, scientific_name, category, image_url)",
+          "id, species_id, seen_at, location_name, latitude, longitude, species:species_id(common_name, common_name_ca, scientific_name, category, image_url, description, description_ca, description_es, habitat, habitat_ca, habitat_es, curiosities, curiosities_ca, curiosities_es)",
         )
         .eq("user_id", user.id)
         .not("latitude", "is", null)
@@ -99,12 +113,17 @@ export default function MapPage() {
           longitude: item.longitude as number,
           seenAt: item.seen_at,
           locationName: item.location_name,
-          commonName: item.species?.common_name ?? "Especie desconocida",
+          commonName: item.species
+            ? getLocalizedCommonName(item.species, profileLanguage)
+            : "Especie desconocida",
           scientificName: item.species?.scientific_name ?? null,
           category: item.species?.category ?? null,
           imageUrl: item.species?.image_url ?? null,
+          localizedDescription: item.species
+            ? getLocalizedSpeciesText(item.species, profileLanguage).description
+            : null,
         })),
-    [sightings],
+    [profileLanguage, sightings],
   );
 
   const initialCenter = useMemo<[number, number]>(() => {
@@ -191,6 +210,9 @@ export default function MapPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-forest-dark">{point.commonName}</p>
                       <p className="truncate text-xs text-forest-soft">📍 {getLocationLabel(point.locationName)}</p>
+                      {point.localizedDescription ? (
+                        <p className="truncate text-[11px] text-forest-soft">{point.localizedDescription}</p>
+                      ) : null}
                     </div>
 
                     <p className="shrink-0 text-[11px] text-forest-soft">

@@ -2,13 +2,30 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useProfileLanguage } from "@/hooks/useProfileLanguage";
+import { getLocalizedCommonName } from "@/lib/getLocalizedCommonName";
+import { getLocalizedSpeciesText } from "@/lib/getLocalizedSpeciesText";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import type { Species, SpeciesCategory } from "@/lib/types";
 
 type SpeciesCard = Pick<
   Species,
-  "id" | "common_name" | "scientific_name" | "category" | "image_url"
+  | "id"
+  | "common_name"
+  | "common_name_ca"
+  | "scientific_name"
+  | "description"
+  | "description_ca"
+  | "description_es"
+  | "habitat"
+  | "habitat_ca"
+  | "habitat_es"
+  | "curiosities"
+  | "curiosities_ca"
+  | "curiosities_es"
+  | "category"
+  | "image_url"
 >;
 
 type SightingSpeciesRef = {
@@ -139,11 +156,15 @@ const categoryLockedIcon: Record<SpeciesCategory, string> = {
   other: "❓",
 };
 
-const speciesSelectFields = "id, common_name, scientific_name, category, image_url";
+const speciesSelectFields =
+  "id, common_name, common_name_ca, scientific_name, description, description_ca, description_es, habitat, habitat_ca, habitat_es, curiosities, curiosities_ca, curiosities_es, category, image_url";
+const MAX_RECENT_DISCOVERIES = 5;
+const RECENT_DISCOVERY_WINDOW_DAYS = 1;
 
 export default function CollectionPage() {
   const UNDISCOVERED_PAGE_SIZE = 20;
   const { user, loading: authLoading } = useCurrentUser();
+  const { language: profileLanguage } = useProfileLanguage();
   const [loading, setLoading] = useState(true);
   const [species, setSpecies] = useState<SpeciesCard[]>([]);
   const [discoveredSpeciesIds, setDiscoveredSpeciesIds] = useState<string[]>([]);
@@ -238,6 +259,8 @@ export default function CollectionPage() {
           (a, b) =>
             new Date(b.seen_at).getTime() - new Date(a.seen_at).getTime(),
         );
+      const recentThresholdMs =
+        Date.now() - RECENT_DISCOVERY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
       const latestBySpecies: LatestSightingBySpeciesId = {};
       sortedSightings.forEach((sighting) => {
@@ -259,8 +282,15 @@ export default function CollectionPage() {
 
       sortedSightings.forEach((sighting) => {
         const speciesId = sighting.species_id;
+        const seenAtMs = new Date(sighting.seen_at).getTime();
 
-        if (!speciesId || recentSeenIds.has(speciesId) || recentIds.length >= 5) {
+        if (
+          !speciesId ||
+          recentSeenIds.has(speciesId) ||
+          recentIds.length >= MAX_RECENT_DISCOVERIES ||
+          !Number.isFinite(seenAtMs) ||
+          seenAtMs < recentThresholdMs
+        ) {
           return;
         }
 
@@ -321,12 +351,8 @@ export default function CollectionPage() {
   }, [recentSpeciesIds, species]);
 
   const unlockedCollectionSpecies = useMemo(() => {
-    const recentSet = new Set(recentSpeciesIds);
-
-    return species.filter(
-      (item) => discoveredSpeciesIds.includes(item.id) && !recentSet.has(item.id),
-    );
-  }, [discoveredSpeciesIds, recentSpeciesIds, species]);
+    return species.filter((item) => discoveredSpeciesIds.includes(item.id));
+  }, [discoveredSpeciesIds, species]);
 
   const undiscoveredSpecies = useMemo(
     () => species.filter((item) => !discoveredSpeciesIds.includes(item.id)),
@@ -381,6 +407,8 @@ export default function CollectionPage() {
 
   const renderUnlockedCard = (speciesItem: SpeciesCard) => {
     const category = (speciesItem.category as SpeciesCategory) ?? "other";
+    const localizedText = getLocalizedSpeciesText(speciesItem, profileLanguage);
+    const localizedCommonName = getLocalizedCommonName(speciesItem, profileLanguage);
     const categoryLabel = categoryLabelMap[category] ?? "Otro";
     const categoryStyle = getCategoryStyle(category);
     const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
@@ -404,7 +432,7 @@ export default function CollectionPage() {
               {speciesItem.image_url ? (
                 <img
                   src={speciesItem.image_url}
-                  alt={speciesItem.common_name}
+                  alt={localizedCommonName}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -416,9 +444,12 @@ export default function CollectionPage() {
           </div>
         </div>
         <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
-          <h3 className="text-sm font-semibold text-forest-dark">{speciesItem.common_name}</h3>
+          <h3 className="text-sm font-semibold text-forest-dark">{localizedCommonName}</h3>
           <p className="mt-1 text-xs italic text-[#5c6f64]">
             {speciesItem.scientific_name ?? "Sense nom científic"}
+          </p>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-forest-soft">
+            {localizedText.description}
           </p>
           {locationText ? (
             <p className="mt-1 truncate text-[11px] text-forest-soft">{locationText}</p>
@@ -616,6 +647,7 @@ export default function CollectionPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleUndiscoveredSpecies.map((speciesItem) => {
               const cat = (speciesItem.category as SpeciesCategory) ?? "other";
+              const localizedCommonName = getLocalizedCommonName(speciesItem, profileLanguage);
               const categoryLabel = categoryLabelMap[cat] ?? "Altre";
               const categoryStyle = getCategoryStyle(cat);
               const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
@@ -638,7 +670,7 @@ export default function CollectionPage() {
                   </div>
                   <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
                     <h3 className="text-sm font-semibold text-forest-dark">
-                      {speciesItem.common_name}
+                      {localizedCommonName}
                     </h3>
                     <p className="mt-1 text-xs text-forest-soft">Per descobrir</p>
                     <div className="mt-auto flex items-end justify-between gap-2 pt-3">

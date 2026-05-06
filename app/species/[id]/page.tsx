@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import LocalizedSpeciesName from "@/components/LocalizedSpeciesName";
+import SpeciesLocalizedTextPanels from "@/components/SpeciesLocalizedTextPanels";
 import SpeciesSightingPhoto from "@/components/SpeciesSightingPhoto";
 import SpeciesSightingLocation from "@/components/SpeciesSightingLocation";
 import { createSupabaseClient } from "@/lib/supabaseClient";
@@ -11,52 +13,73 @@ type SpeciesPageProps = {
 };
 
 const speciesSelectFields =
-  "id, common_name, scientific_name, category, description, habitat, curiosities, image_url, is_active, created_at, size_range, weight_range, lifespan, diet, activity, conservation_status";
-
-type QuickFact = { label: string; value: string; icon: string };
+  "id, common_name, common_name_ca, scientific_name, category, description, description_ca, description_es, habitat, habitat_ca, habitat_es, curiosities, curiosities_ca, curiosities_es, image_url, is_active, created_at, size_range, size_range_ca, weight_range, weight_range_ca, lifespan, lifespan_ca, diet, diet_ca, activity, activity_ca, conservation_status, conservation_status_ca";
 
 type DisplaySpecies = {
   id: string;
   commonName: string;
+  commonNameCa: string | null;
   scientificName: string;
   imageEmoji: string;
   imageUrl: string | null;
-  shortDescription: string;
-  habitat: string;
-  curiosities: string[];
-  quickFacts: QuickFact[];
+  localizedTextSource: Pick<
+    Species,
+    | "description"
+    | "description_ca"
+    | "description_es"
+    | "habitat"
+    | "habitat_ca"
+    | "habitat_es"
+    | "curiosities"
+    | "curiosities_ca"
+    | "curiosities_es"
+    | "size_range"
+    | "size_range_ca"
+    | "weight_range"
+    | "weight_range_ca"
+    | "lifespan"
+    | "lifespan_ca"
+    | "diet"
+    | "diet_ca"
+    | "activity"
+    | "activity_ca"
+    | "conservation_status"
+    | "conservation_status_ca"
+  >;
   locationName?: string;
 };
-
-function buildQuickFacts(species: Species): QuickFact[] {
-  const raw: Array<{ label: string; value: string | null; icon: string }> = [
-    { label: "Tamaño", value: species.size_range, icon: "📏" },
-    { label: "Peso", value: species.weight_range, icon: "⚖️" },
-    { label: "Longevidad", value: species.lifespan, icon: "⏳" },
-    { label: "Alimentación", value: species.diet, icon: "🌿" },
-    { label: "Actividad", value: species.activity, icon: "🌙" },
-    { label: "Estado", value: species.conservation_status, icon: "🛡️" },
-  ];
-
-  return raw
-    .filter((item): item is QuickFact => typeof item.value === "string" && item.value.trim().length > 0)
-    .map((item) => ({ ...item, value: item.value.trim() }));
-}
 
 function mapDbSpeciesToDisplay(species: Species): DisplaySpecies {
   return {
     id: species.id,
     commonName: species.common_name,
+    commonNameCa: species.common_name_ca,
     scientificName: species.scientific_name ?? "Sense nom científic",
     imageEmoji: "🐾",
     imageUrl: species.image_url,
-    shortDescription: species.description ?? "Descripció pendent.",
-    habitat: species.habitat ?? "Hàbitat pendent d'afegir.",
-    curiosities:
-      species.curiosities && species.curiosities.length > 0
-        ? species.curiosities
-        : ["Encara no hi ha curiositats registrades per a aquesta espècie."],
-    quickFacts: buildQuickFacts(species),
+    localizedTextSource: {
+      description: species.description,
+      description_ca: species.description_ca,
+      description_es: species.description_es,
+      habitat: species.habitat,
+      habitat_ca: species.habitat_ca,
+      habitat_es: species.habitat_es,
+      curiosities: species.curiosities,
+      curiosities_ca: species.curiosities_ca,
+      curiosities_es: species.curiosities_es,
+      size_range: species.size_range,
+      size_range_ca: species.size_range_ca,
+      weight_range: species.weight_range,
+      weight_range_ca: species.weight_range_ca,
+      lifespan: species.lifespan,
+      lifespan_ca: species.lifespan_ca,
+      diet: species.diet,
+      diet_ca: species.diet_ca,
+      activity: species.activity,
+      activity_ca: species.activity_ca,
+      conservation_status: species.conservation_status,
+      conservation_status_ca: species.conservation_status_ca,
+    },
   };
 }
 
@@ -85,13 +108,33 @@ async function getSpeciesFromSources(id: string): Promise<DisplaySpecies | null>
   return {
     id: mockItem.id,
     commonName: mockItem.commonName,
+    commonNameCa: null,
     scientificName: mockItem.scientificName,
     imageEmoji: mockItem.imageEmoji,
     imageUrl: null,
-    shortDescription: mockItem.shortDescription,
-    habitat: mockItem.habitat,
-    curiosities: mockItem.curiosities,
-    quickFacts: [],
+    localizedTextSource: {
+      description: mockItem.shortDescription,
+      description_ca: null,
+      description_es: mockItem.shortDescription,
+      habitat: mockItem.habitat,
+      habitat_ca: null,
+      habitat_es: mockItem.habitat,
+      curiosities: mockItem.curiosities,
+      curiosities_ca: null,
+      curiosities_es: mockItem.curiosities,
+      size_range: null,
+      size_range_ca: null,
+      weight_range: null,
+      weight_range_ca: null,
+      lifespan: null,
+      lifespan_ca: null,
+      diet: null,
+      diet_ca: null,
+      activity: null,
+      activity_ca: null,
+      conservation_status: null,
+      conservation_status_ca: null,
+    },
     locationName: mockItem.locationName,
   };
 }
@@ -132,57 +175,15 @@ export default async function SpeciesDetailPage({ params }: SpeciesPageProps) {
           </div>
 
           <div className="mt-5">
-            <h1 className="text-2xl font-semibold text-[#223127]">
-              {species.commonName}
-            </h1>
+            <LocalizedSpeciesName
+              commonName={species.commonName}
+              commonNameCa={species.commonNameCa}
+              className="text-2xl font-semibold text-[#223127]"
+            />
             <p className="text-sm italic text-[#5f7267]">{species.scientificName}</p>
           </div>
 
-          <p className="mt-5 text-sm leading-6 text-[#42564b]">{species.shortDescription}</p>
-
-          {species.quickFacts.length > 0 ? (
-            <div className="mt-5">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#597061]">
-                Dades ràpides
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {species.quickFacts.map((fact) => (
-                  <div
-                    key={fact.label}
-                    className="flex flex-col gap-1 rounded-2xl border border-[#dce5d4] bg-white px-3 py-3"
-                  >
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="hidden shrink-0 text-base leading-none xs:inline">{fact.icon}</span>
-                      <span className="truncate text-xs font-semibold uppercase tracking-wide text-[#597061]">
-                        {fact.label}
-                      </span>
-                    </div>
-                    <span className="text-sm text-[#2e3f37]">{fact.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-5 rounded-2xl border border-[#d8e1d0] bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
-              Hàbitat
-            </p>
-            <p className="mt-1 text-sm text-[#34473d]">{species.habitat}</p>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-[#d8e1d0] bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#597061]">
-              Curiositats
-            </p>
-            <ul className="mt-2 space-y-2 text-sm text-[#34473d]">
-              {species.curiosities.slice(0, 3).map((curiosity) => (
-                <li key={curiosity} className="rounded-lg bg-[#f4f7f0] px-3 py-2">
-                  {curiosity}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <SpeciesLocalizedTextPanels speciesTextSource={species.localizedTextSource} />
 
           <SpeciesSightingLocation
             speciesId={species.id}

@@ -5,7 +5,10 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useProfileLanguage } from "@/hooks/useProfileLanguage";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getLocalizedCommonName } from "@/lib/getLocalizedCommonName";
+import { getLocalizedSpeciesText } from "@/lib/getLocalizedSpeciesText";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import {
   achievementKeyToLabel,
@@ -22,7 +25,21 @@ const LocationPickerModal = dynamic(() => import("@/components/LocationPickerMod
 
 type SpeciesOption = Pick<
   Species,
-  "id" | "common_name" | "scientific_name" | "description" | "category" | "image_url"
+  | "id"
+  | "common_name"
+  | "common_name_ca"
+  | "scientific_name"
+  | "description"
+  | "description_ca"
+  | "description_es"
+  | "habitat"
+  | "habitat_ca"
+  | "habitat_es"
+  | "curiosities"
+  | "curiosities_ca"
+  | "curiosities_es"
+  | "category"
+  | "image_url"
 >;
 
 interface IdentifySuggestion {
@@ -31,18 +48,47 @@ interface IdentifySuggestion {
   confidence: number;
 }
 
+interface MissingCandidate {
+  common_name: string;
+  scientific_name: string | null;
+  reason: string;
+}
+
 interface IdentifyApiResponse {
-  status?: "identified" | "uncertain";
+  status?: "identified" | "uncertain" | "missing_species";
   suggestion?: IdentifySuggestion | null;
+  missingCandidate?: MissingCandidate | null;
   error?: string;
+}
+
+function canonicalScientificName(value: string): string {
+  const cleaned = value.trim().toLowerCase().replace(/[(),]/g, " ").replace(/\s+/g, " ").trim();
+  const [genus = "", species = ""] = cleaned.split(" ");
+
+  if (!genus || !species) {
+    return cleaned;
+  }
+
+  const pair = `${genus} ${species}`;
+
+  if (pair === "helix aspersa") {
+    return "cornu aspersum";
+  }
+
+  if (pair === "cornu aspersum") {
+    return "cornu aspersum";
+  }
+
+  return pair;
 }
 
 type IdentificationResult =
   | { status: "identified"; suggestion: IdentifySuggestion }
   | { status: "uncertain" }
+  | { status: "missing_species"; missingCandidate: MissingCandidate }
   | null;
 
-type LocationSource = "photo-metadata" | "device" | null;
+type LocationSource = "photo-metadata" | "manual" | "current" | null;
 
 async function uploadSightingPhoto(
   supabase: ReturnType<typeof createSupabaseBrowserClient>,
@@ -110,6 +156,7 @@ export default function CapturePage() {
   const [locationSource, setLocationSource] = useState<LocationSource>(null);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const { language: profileLanguage } = useProfileLanguage();
   const [lastDiscoveryMode, setLastDiscoveryMode] = useState<"new" | "repeat" | null>(null);
   const suggestionsRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -136,7 +183,9 @@ export default function CapturePage() {
 
       const { data, error } = await supabase
         .from("species")
-        .select("id, common_name, scientific_name, description, category, image_url")
+        .select(
+          "id, common_name, common_name_ca, scientific_name, description, description_ca, description_es, habitat, habitat_ca, habitat_es, curiosities, curiosities_ca, curiosities_es, category, image_url",
+        )
         .eq("is_active", true)
         .order("common_name", { ascending: true });
 
@@ -161,6 +210,14 @@ export default function CapturePage() {
   const selectedSpecies = useMemo(
     () => speciesOptions.find((species) => species.id === selectedSpeciesId) ?? null,
     [selectedSpeciesId, speciesOptions],
+  );
+
+  const selectedSpeciesCommonName = useMemo(
+    () =>
+      selectedSpecies
+        ? getLocalizedCommonName(selectedSpecies, profileLanguage)
+        : null,
+    [profileLanguage, selectedSpecies],
   );
 
   const locationEditorInitialCenter = useMemo(
@@ -312,6 +369,19 @@ export default function CapturePage() {
         return;
       }
 
+      if (payload.status === "missing_species" && payload.missingCandidate) {
+        setIdentificationResult({
+          status: "missing_species",
+          missingCandidate: payload.missingCandidate,
+        });
+        setIdentifyMessage(null);
+        setTimeout(() => {
+          suggestionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+
+        return;
+      }
+
       if (payload.status !== "identified" || !payload.suggestion) {
         setIdentificationResult({ status: "uncertain" });
         setIdentifyMessage(null);
@@ -322,11 +392,17 @@ export default function CapturePage() {
         return;
       }
 
-      const normalizedScientific = payload.suggestion.scientific_name.trim().toLowerCase();
-      const matchedSpecies = speciesOptions.find(
-        (species) =>
-          (species.scientific_name ?? "").trim().toLowerCase() === normalizedScientific,
-      );
+      const normalizedScientific = canonicalScientificName(payload.suggestion.scientific_name);
+      const normalizedCommon = payload.suggestion.common_name.trim().toLowerCase();
+      const matchedSpecies = speciesOptions.find((species) => {
+        const scientificMatches =
+          canonicalScientificName(species.scientific_name ?? "") === normalizedScientific;
+        const commonMatches =
+          species.common_name.trim().toLowerCase() === normalizedCommon ||
+          species.common_name_ca?.trim().toLowerCase() === normalizedCommon;
+
+        return scientificMatches || commonMatches;
+      });
 
       if (!matchedSpecies) {
         setIdentifyMessage("No hem pogut vincular el suggeriment amb una espècie activa de l'app.");
@@ -400,12 +476,9 @@ export default function CapturePage() {
     const { error: insertError } = await supabase.from("sightings").insert({
       user_id: user.id,
       species_id: selectedSpecies.id,
-      custom_name: selectedSpecies.common_name,
+      custom_name: selectedSpeciesCommonName ?? selectedSpecies.common_name,
       photo_url: uploadedPhotoUrl,
-      location_name: capturedLocation
-        ? locationName ??
-          (locationSource === "photo-metadata" ? "Ubicació detectada" : "Ubicació personalitzada")
-        : null,
+      location_name: capturedLocation ? locationName ?? "Ubicació guardada" : null,
       latitude: capturedLocation?.latitude ?? null,
       longitude: capturedLocation?.longitude ?? null,
       seen_at: new Date().toISOString(),
@@ -490,9 +563,9 @@ export default function CapturePage() {
 
           setDiscoveryModal({
             mode: discoveryMode,
-            commonName: selectedSpecies.common_name,
+            commonName: selectedSpeciesCommonName ?? selectedSpecies.common_name,
             scientificName: selectedSpecies.scientific_name,
-            description: selectedSpecies.description,
+            description: getLocalizedSpeciesText(selectedSpecies, profileLanguage).description,
             category: selectedSpecies.category as SpeciesCategory,
             imageUrl: selectedSpecies.image_url,
             achievement:
@@ -508,9 +581,9 @@ export default function CapturePage() {
 
     setDiscoveryModal({
       mode: lastDiscoveryMode === discoveryMode ? lastDiscoveryMode : discoveryMode,
-      commonName: selectedSpecies.common_name,
+      commonName: selectedSpeciesCommonName ?? selectedSpecies.common_name,
       scientificName: selectedSpecies.scientific_name,
-      description: selectedSpecies.description,
+      description: getLocalizedSpeciesText(selectedSpecies, profileLanguage).description,
       category: selectedSpecies.category as SpeciesCategory,
       imageUrl: selectedSpecies.image_url,
     });
@@ -520,11 +593,15 @@ export default function CapturePage() {
     setLocationPickerOpen(true);
   };
 
-  const handleSaveEditedLocation = (coords: { latitude: number; longitude: number }) => {
-    setCapturedLocation(coords);
-    setLocationSource("device");
-    setLocationName("Ubicació personalitzada");
-    setLocationMessage("Ubicació personalitzada desada.");
+  const handleSaveEditedLocation = (payload: {
+    coords: { latitude: number; longitude: number };
+    locationName: string;
+    source: "manual" | "current";
+  }) => {
+    setCapturedLocation(payload.coords);
+    setLocationSource(payload.source);
+    setLocationName(payload.locationName);
+    setLocationMessage("Ubicació desada.");
     setLocationPickerOpen(false);
   };
 
@@ -561,6 +638,7 @@ export default function CapturePage() {
       <LocationPickerModal
         isOpen={locationPickerOpen}
         initialCenter={locationEditorInitialCenter}
+        initialLocationName={locationName}
         onClose={() => setLocationPickerOpen(false)}
         onSave={handleSaveEditedLocation}
       />
@@ -584,7 +662,7 @@ export default function CapturePage() {
               <div className="px-4 text-center">
                 <p className="text-6xl">📸</p>
                 <p className="mt-4 text-sm text-[#53675b]">
-                  Puja o captura una foto per identificar l'animal amb IA.
+                  Puja o captura una foto per descobrir quin animal és.
                 </p>
               </div>
             )}
@@ -606,32 +684,34 @@ export default function CapturePage() {
             className="mt-2 block w-full rounded-xl border border-sand-dark bg-white px-3 py-2 text-sm text-forest-dark file:mr-3 file:rounded-full file:border-0 file:bg-sand-dark file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-forest"
           />
 
-          <div className="mt-5 rounded-2xl border border-[#d8cdb5] bg-[#f1eadb] p-4 shadow-[0_10px_22px_-16px_rgba(47,93,80,0.35)]">
-            <div className="mb-3 h-1 w-16 rounded-full bg-[#2F5D50]" />
-            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
-              Identificació amb IA
-            </p>
-            <p className="mt-1 text-sm text-forest">
-              Analitza la foto i et mostrarem una espècie només quan el resultat sigui fiable.
-            </p>
+          {identificationResult?.status !== "identified" ? (
+            <div className="mt-5 rounded-2xl border border-[#d8cdb5] bg-[#f1eadb] p-4 shadow-[0_10px_22px_-16px_rgba(47,93,80,0.35)]">
+              <div className="mb-3 h-1 w-16 rounded-full bg-[#2F5D50]" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
+                Descobreix quin animal és
+              </p>
+              <p className="mt-1 text-sm text-forest">
+                Analitza la foto i et mostrarem una espècie només quan el resultat sigui fiable.
+              </p>
 
-            <button
-              type="button"
-              onClick={handleIdentify}
-              disabled={preparingImage || identifyLoading || loadingSpecies || !photoDataUrl || speciesOptions.length === 0}
-              className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3.5 text-sm font-semibold text-[#F4F1E8] shadow-[0_14px_24px_-16px_rgba(26,42,34,0.95)] transition hover:bg-[#264d42] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {preparingImage
-                ? "Preparant imatge..."
-                : identifyLoading
-                  ? "Analitzant imatge..."
-                  : "Identificar animal"}
-            </button>
+              <button
+                type="button"
+                onClick={handleIdentify}
+                disabled={preparingImage || identifyLoading || loadingSpecies || !photoDataUrl || speciesOptions.length === 0}
+                className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3.5 text-sm font-semibold text-[#F4F1E8] shadow-[0_14px_24px_-16px_rgba(26,42,34,0.95)] transition hover:bg-[#264d42] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {preparingImage
+                  ? "Preparant imatge..."
+                  : identifyLoading
+                    ? "Analitzant imatge..."
+                    : "Descobrir animal"}
+              </button>
 
-            <p className="mt-3 text-xs text-forest-soft">
-              Només et mostrem una espècie quan la IA està molt segura de la identificació.
-            </p>
-          </div>
+              <p className="mt-3 text-xs text-forest-soft">
+                Només mostrem resultats quan estem bastant segurs.
+              </p>
+            </div>
+          ) : null}
 
           {speciesMessage ? (
             <p className="mt-3 rounded-xl border border-sand-dark bg-sand px-3 py-2 text-sm text-forest-soft">
@@ -654,14 +734,11 @@ export default function CapturePage() {
 
         {identificationResult?.status === "identified" && selectedSpecies ? (
           <section ref={suggestionsRef} className="rounded-3xl border border-sand-dark bg-sand p-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
-              Resultat IA
-            </p>
-
             <article className="mt-4 rounded-2xl border border-[#6f9279] bg-[#edf5ea] px-4 py-4">
-              <p className="text-sm font-medium text-forest-soft">Creiem que és:</p>
+              <p className="text-lg font-semibold text-forest-dark">✨ Nou descobriment</p>
+              <p className="mt-1 text-sm font-medium text-forest-soft">Creiem que és:</p>
               <p className="mt-1 text-xs text-forest-soft">
-                Només mostrem aquest resultat perquè la IA té una confiança alta.
+                Només mostrem resultats quan estem bastant segurs.
               </p>
               <div className="mt-3 flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -669,7 +746,7 @@ export default function CapturePage() {
                     {!speciesPreviewFailed && (selectedSpecies.image_url ?? photoDataUrl) ? (
                       <img
                         src={selectedSpecies.image_url ?? photoDataUrl ?? undefined}
-                        alt={identificationResult.suggestion.common_name}
+                        alt={selectedSpeciesCommonName ?? identificationResult.suggestion.common_name}
                         className="h-full w-full object-cover"
                         onError={() => setSpeciesPreviewFailed(true)}
                       />
@@ -679,14 +756,14 @@ export default function CapturePage() {
                   </div>
                   <div>
                     <p className="text-base font-semibold text-forest-dark">
-                      {identificationResult.suggestion.common_name}
+                      {selectedSpeciesCommonName ?? identificationResult.suggestion.common_name}
                     </p>
                     <p className="text-sm italic text-forest-soft">
                       {identificationResult.suggestion.scientific_name}
                     </p>
                   </div>
                 </div>
-                <span className="rounded-full border border-[#b7c9b7] bg-white px-2.5 py-1 text-xs font-semibold text-forest">
+                <span className="rounded-full border border-[#b7c9b7] bg-white px-2 py-0.5 text-[11px] font-semibold text-forest">
                   {Math.round(identificationResult.suggestion.confidence * 100)}%
                 </span>
               </div>
@@ -694,18 +771,18 @@ export default function CapturePage() {
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={handleOpenLocationEditor}
-                  className="rounded-full border border-sand-dark bg-white px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Editar ubicació
-                </button>
-                <button
-                  type="button"
                   onClick={handleSave}
                   disabled={saved || loading || !selectedSpeciesId}
                   className="rounded-full bg-[#2F5D50] px-5 py-3 text-sm font-semibold text-[#F4F1E8] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {saved ? "Desat" : "Guardar descobriment"}
+                  {saved ? "Desat" : "Guardar al meu àlbum"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenLocationEditor}
+                  className="rounded-full border border-sand-dark bg-white px-5 py-3 text-sm font-semibold text-forest disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Canviar ubicacio / Cambiar ubicacion
                 </button>
               </div>
 
@@ -713,15 +790,12 @@ export default function CapturePage() {
                 {capturedLocation ? (
                   <>
                     <p className="font-medium text-forest-dark">
-                      📍 {locationName ?? "Ubicació detectada"}
-                    </p>
-                    <p className="mt-1 text-xs text-forest-soft">
-                      {capturedLocation.latitude.toFixed(5)}, {capturedLocation.longitude.toFixed(5)}
+                      📍 {locationName ?? "Ubicació guardada"}
                     </p>
                   </>
                 ) : (
                   <p>
-                    La foto no inclou ubicació. La pots afegir des d'aquí abans de desar.
+                    La foto no inclou ubicació. La pots afegir abans de desar.
                   </p>
                 )}
                 {locationMessage ? (
@@ -746,10 +820,33 @@ export default function CapturePage() {
           </section>
         ) : null}
 
+        {identificationResult?.status === "missing_species" ? (
+          <section ref={suggestionsRef} className="rounded-3xl border border-sand-dark bg-sand p-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
+              Resultat
+            </p>
+            <div className="mt-4 rounded-2xl border border-sand-dark bg-white px-4 py-4">
+              <p className="text-base font-medium text-forest-dark">
+                Parece una especie que todavía no tenemos en TOVA.
+              </p>
+              <p className="mt-2 text-sm text-forest-soft">
+                Gracias por ayudarnos a mejorar la colección. La revisaremos para añadirla pronto.
+              </p>
+              <button
+                type="button"
+                onClick={handlePickAnotherPhoto}
+                className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3 text-sm font-semibold text-[#F4F1E8]"
+              >
+                Intentar con otra foto
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         {identificationResult?.status === "uncertain" ? (
           <section ref={suggestionsRef} className="rounded-3xl border border-sand-dark bg-sand p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-forest-soft">
-              Resultat IA
+              Resultat
             </p>
             <div className="mt-4 rounded-2xl border border-sand-dark bg-white px-4 py-4">
               <p className="text-base font-medium text-forest-dark">
