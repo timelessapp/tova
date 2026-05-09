@@ -844,28 +844,32 @@ export async function POST(request: Request) {
 
     const modelSuggestions = toValidSuggestions(parsed);
     const missingCandidate = toValidMissingCandidate(parsed);
-    const suggestions = modelSuggestions.filter((suggestion) => {
-      const commonAllowed = allowedCommon.has(normalize(suggestion.common_name));
-      const scientificAllowed = allowedScientific.has(
-        canonicalScientificName(suggestion.scientific_name),
-      );
+    
+    // Filter valid suggestions (in catalog) and sort by confidence DESC
+    const validSuggestions = modelSuggestions
+      .filter((suggestion) => {
+        const commonAllowed = allowedCommon.has(normalize(suggestion.common_name));
+        const scientificAllowed = allowedScientific.has(
+          canonicalScientificName(suggestion.scientific_name),
+        );
+        return commonAllowed || scientificAllowed;
+      })
+      .sort((left, right) => right.confidence - left.confidence);
 
-      return commonAllowed || scientificAllowed;
-    });
+    // Best suggestion from model (all suggestions sorted)
+    const bestModelSuggestion = modelSuggestions.length > 0
+      ? modelSuggestions.sort((left, right) => right.confidence - left.confidence)[0]
+      : null;
 
-    const bestModelSuggestion = [...modelSuggestions].sort(
-      (left, right) => right.confidence - left.confidence,
-    )[0] ?? null;
+    // Best suggestion from valid (in catalog) suggestions
+    const bestValidSuggestion = validSuggestions.length > 0 ? validSuggestions[0] : null;
 
-    const bestSuggestion = [...suggestions].sort(
-      (left, right) => right.confidence - left.confidence,
-    )[0] ?? null;
-
-    if (!bestSuggestion && missingCandidate) {
+    // Case 1: No valid suggestion in catalog, but model found a missing species
+    if (!bestValidSuggestion && missingCandidate) {
       logIdentifyDebug({
         speciesCount,
         speciesList: normalizedCandidates,
-        bestSuggestion: null,
+        bestSuggestion: bestModelSuggestion,
         uncertainReason: "species_not_in_catalog",
       });
 
@@ -875,12 +879,12 @@ export async function POST(request: Request) {
         imageUrl,
         status: "missing_species",
         missingCandidate,
+        bestSuggestion: bestModelSuggestion,
         speciesCount,
         candidateSpeciesSnapshot,
         uncertainReason: "species_not_in_catalog",
         modelRawResponse,
-        internalSuggestions: suggestions,
-        errorMessage: uploadErrorMessage,
+        internalSuggestions: validSuggestions,
       });
 
       return NextResponse.json({
@@ -890,19 +894,22 @@ export async function POST(request: Request) {
       } satisfies IdentifyResponse);
     }
 
-    if (!bestSuggestion || bestSuggestion.confidence < IDENTIFY_CONFIDENCE_THRESHOLD) {
+    // Case 2: Valid suggestion found but confidence too low, or no valid suggestions at all
+    if (!bestValidSuggestion || bestValidSuggestion.confidence < IDENTIFY_CONFIDENCE_THRESHOLD) {
       const uncertainReason =
         modelSuggestions.length === 0
           ? "empty_model_suggestions"
-          : suggestions.length === 0
-            ? "suggestions_filtered_out"
+          : validSuggestions.length === 0
+            ? "filtered_out_not_in_catalog"
             : "below_threshold";
-      const loggedBestSuggestion = bestSuggestion ?? bestModelSuggestion;
+
+      // For logging: use best valid suggestion if exists, else best model suggestion
+      const bestForLog = bestValidSuggestion ?? bestModelSuggestion;
 
       logIdentifyDebug({
         speciesCount,
         speciesList: normalizedCandidates,
-        bestSuggestion: loggedBestSuggestion,
+        bestSuggestion: bestForLog,
         uncertainReason,
       });
 
@@ -911,13 +918,12 @@ export async function POST(request: Request) {
         userId: resolvedAuth.userId,
         imageUrl,
         status: "uncertain",
-        bestSuggestion: loggedBestSuggestion,
+        bestSuggestion: bestForLog,
         speciesCount,
         candidateSpeciesSnapshot,
         uncertainReason,
         modelRawResponse,
-        internalSuggestions: suggestions,
-        errorMessage: uploadErrorMessage,
+        internalSuggestions: validSuggestions,
       });
 
       return NextResponse.json({
@@ -927,10 +933,11 @@ export async function POST(request: Request) {
       } satisfies IdentifyResponse);
     }
 
+    // Case 3: Valid suggestion with confidence >= threshold
     logIdentifyDebug({
       speciesCount,
       speciesList: normalizedCandidates,
-      bestSuggestion,
+      bestSuggestion: bestValidSuggestion,
       uncertainReason: null,
     });
 
@@ -939,17 +946,16 @@ export async function POST(request: Request) {
       userId: resolvedAuth.userId,
       imageUrl,
       status: "identified",
-      bestSuggestion,
+      bestSuggestion: bestValidSuggestion,
       speciesCount,
       candidateSpeciesSnapshot,
       modelRawResponse,
-      internalSuggestions: suggestions,
-      errorMessage: uploadErrorMessage,
+      internalSuggestions: validSuggestions,
     });
 
     return NextResponse.json({
       status: "identified",
-      suggestion: bestSuggestion,
+      suggestion: bestValidSuggestion,
       missingCandidate: null,
     } satisfies IdentifyResponse);
   } catch {
@@ -967,10 +973,7 @@ export async function POST(request: Request) {
       status: "error",
       speciesCount,
       candidateSpeciesSnapshot,
-      errorMessage: joinLogMessages(
-        "Error al consultar OpenAI para identificar la imagen.",
-        uploadErrorMessage,
-      ),
+      errorMessage: "Error al consultar OpenAI para identificar la imagen.",
     });
 
     return NextResponse.json(
