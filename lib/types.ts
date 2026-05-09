@@ -83,6 +83,8 @@ export type AiIdentificationLog = {
   model_raw_response: Json | null;
   internal_suggestions: Json | null;
   needs_species_review: boolean;
+  user_rejected: boolean;
+  error_creating_species: boolean;
   error_message: string | null;
   created_at: string;
 };

@@ -58,6 +58,8 @@ interface IdentifyApiResponse {
   status?: "identified" | "uncertain" | "missing_species";
   suggestion?: IdentifySuggestion | null;
   missingCandidate?: MissingCandidate | null;
+  logId?: string | null;
+  imageUrl?: string | null;
   error?: string;
 }
 
@@ -145,6 +147,8 @@ export default function CapturePage() {
   const [identifyMessage, setIdentifyMessage] = useState<string | null>(null);
   const [identificationResult, setIdentificationResult] = useState<IdentificationResult>(null);
   const [speciesPreviewFailed, setSpeciesPreviewFailed] = useState(false);
+  const [currentLogId, setCurrentLogId] = useState<string | null>(null);
+  const [currentIdentificationImageUrl, setCurrentIdentificationImageUrl] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<string>("");
@@ -368,6 +372,10 @@ export default function CapturePage() {
 
         return;
       }
+
+      // Store the log ID and image URL for later use (e.g., marking as rejected)
+      setCurrentLogId(payload.logId ?? null);
+      setCurrentIdentificationImageUrl(payload.imageUrl ?? null);
 
       if (payload.status === "missing_species" && payload.missingCandidate) {
         setIdentificationResult({
@@ -605,7 +613,41 @@ export default function CapturePage() {
     setLocationPickerOpen(false);
   };
 
-  const handleRejectSuggestion = () => {
+  const handleRejectSuggestion = async () => {
+    // Mark the identification log as rejected
+    if (currentLogId) {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data: sessionData } = supabase
+          ? await supabase.auth.getSession()
+          : { data: { session: null } };
+        const accessToken = sessionData.session?.access_token ?? null;
+
+        const suggestion =
+          identificationResult?.status === "identified"
+            ? identificationResult.suggestion
+            : null;
+
+        await fetch("/api/identify/reject", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            logId: currentLogId,
+            accessToken,
+            imageUrl: currentIdentificationImageUrl,
+            bestCommonName: suggestion?.common_name ?? null,
+            bestScientificName: suggestion?.scientific_name ?? null,
+            bestConfidence: suggestion?.confidence ?? null,
+          }),
+        });
+      } catch (err) {
+        console.error("Error marking identification as rejected:", err);
+      }
+    }
+
     resetIdentification();
     setIdentifyMessage("Gràcies. Ho pots tornar a provar amb una altra foto.");
   };
@@ -697,7 +739,14 @@ export default function CapturePage() {
               <button
                 type="button"
                 onClick={handleIdentify}
-                disabled={preparingImage || identifyLoading || loadingSpecies || !photoDataUrl || speciesOptions.length === 0}
+                disabled={
+                  preparingImage ||
+                  identifyLoading ||
+                  loadingSpecies ||
+                  !photoDataUrl ||
+                  speciesOptions.length === 0 ||
+                  identificationResult !== null
+                }
                 className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3.5 text-sm font-semibold text-[#F4F1E8] shadow-[0_14px_24px_-16px_rgba(26,42,34,0.95)] transition hover:bg-[#264d42] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {preparingImage
@@ -838,15 +887,21 @@ export default function CapturePage() {
               </div>
 
               <p className="text-base font-medium text-forest-dark">
-                L'hemos reconocido, pero todavía no lo tenemos en TOVA.
+                {profileLanguage === "ca"
+                  ? "L'hem reconegut, però encara no el tenim a TOVA."
+                  : "L'hemos reconocido, pero todavía no lo tenemos en TOVA."}
               </p>
 
               <p className="mt-2 text-sm text-forest-soft">
-                Nos ayudas muchísimo. Revisaremos este animal y lo añadiremos a la colección en unos días.
+                {profileLanguage === "ca"
+                  ? "Ens ajudes molt. Revisarem aquest animal i l'afegirem a la col·lecció en uns dies."
+                  : "Nos ayudas muchísimo. Revisaremos este animal y lo añadiremos a la colección en unos días."}
               </p>
 
               <p className="mt-3 text-xs text-forest-soft font-medium">
-                ¡Inténtalo de nuevo en 3-5 días! 📅
+                {profileLanguage === "ca"
+                  ? "Torna-ho a provar d'aquí a 3-5 dies! 📅"
+                  : "¡Inténtalo de nuevo en 3-5 días! 📅"}
               </p>
 
               <button
@@ -854,7 +909,7 @@ export default function CapturePage() {
                 onClick={handlePickAnotherPhoto}
                 className="mt-4 w-full rounded-full bg-[#2F5D50] px-5 py-3 text-sm font-semibold text-[#F4F1E8]"
               >
-                Intentar con otra foto
+                {profileLanguage === "ca" ? "Prova amb una altra foto" : "Intentar con otra foto"}
               </button>
             </div>
           </section>

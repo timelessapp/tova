@@ -29,13 +29,15 @@ interface IdentifyResponse {
   status: "identified" | "uncertain" | "missing_species";
   suggestion: IdentifySuggestion | null;
   missingCandidate: MissingCandidate | null;
+  logId?: string | null;
+  imageUrl?: string | null;
 }
 
 interface IdentifyLogInput {
   accessToken?: string;
   userId?: string | null;
   imageUrl?: string | null;
-  status: "identified" | "uncertain" | "missing_species" | "error";
+  status: "identified" | "uncertain" | "missing_species" | "rejected" | "error";
   bestSuggestion?: IdentifySuggestion | null;
   missingCandidate?: MissingCandidate | null;
   internalSuggestions?: IdentifySuggestion[] | null;
@@ -323,7 +325,8 @@ async function uploadIdentifyImage(options: {
 
   const folder = options.userId ?? "anon";
   const extension = extensionFromMimeType(parsedImage.mimeType);
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  const today = new Date().toISOString().slice(0, 10);
+  const path = `${folder}/${today}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from(AI_IDENTIFICATION_BUCKET)
@@ -355,14 +358,14 @@ async function uploadIdentifyImage(options: {
   };
 }
 
-async function writeIdentifyLog(input: IdentifyLogInput): Promise<void> {
+async function writeIdentifyLog(input: IdentifyLogInput): Promise<string | null> {
   const supabase = createSupabaseRouteClient(input.accessToken);
 
   if (!supabase) {
-    return;
+    return null;
   }
 
-  const logRow: Database["public"]["Tables"]["ai_identification_logs"]["Insert"] = {
+  const logRow = {
     user_id: input.userId ?? null,
     image_url: input.imageUrl ?? null,
     status: input.status,
@@ -377,14 +380,23 @@ async function writeIdentifyLog(input: IdentifyLogInput): Promise<void> {
     model_raw_response: input.modelRawResponse ?? null,
     internal_suggestions: (input.internalSuggestions ?? null) as Json,
     needs_species_review: input.status === "missing_species",
+    user_rejected: false,
+    error_creating_species: false,
     error_message: input.errorMessage ?? null,
   };
 
-  const { error } = await supabase.from("ai_identification_logs").insert(logRow);
+  const { data, error } = await supabase
+    .from("ai_identification_logs")
+    .insert(logRow as any)
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Failed to write AI identification log", error);
+    return null;
   }
+
+  return data?.id ?? null;
 }
 
 function toValidSuggestions(raw: unknown): IdentifySuggestion[] {
@@ -501,14 +513,15 @@ export async function POST(request: Request) {
   let imageDataUrl: string | null = null;
   let speciesList: SpeciesCandidate[] = [];
   let imageUrl: string | null = null;
-  let uploadErrorMessage: string | null = null;
+  let uploadError: string | null = null;
+  let currentLogId: string | null = null;
 
   try {
     const parsed = await parseRequestBody(request);
     imageDataUrl = parsed.imageDataUrl;
     speciesList = parsed.speciesList;
   } catch {
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       status: "error",
@@ -516,7 +529,7 @@ export async function POST(request: Request) {
       candidateSpeciesSnapshot: [],
       errorMessage: "Body invalido.",
     });
-    return NextResponse.json({ error: "Body invalido." }, { status: 400 });
+    return NextResponse.json({ error: "Body invalido.", logId: currentLogId }, { status: 400 });
   }
 
   const normalizedCandidates = Array.isArray(speciesList)
@@ -525,54 +538,9 @@ export async function POST(request: Request) {
   const speciesCount = normalizedCandidates.length;
   const candidateSpeciesSnapshot = buildCandidateSnapshot(normalizedCandidates);
 
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    if (imageDataUrl?.startsWith("data:image/")) {
-      const uploadResult = await uploadIdentifyImage({
-        imageDataUrl,
-        accessToken: resolvedAuth.accessToken,
-        userId: resolvedAuth.userId,
-      });
-      imageUrl = uploadResult.imageUrl;
-      uploadErrorMessage = uploadResult.errorMessage;
-    }
-
-    logIdentifyDebug({
-      speciesCount,
-      speciesList: normalizedCandidates,
-      bestSuggestion: null,
-      uncertainReason: null,
-    });
-
-    await writeIdentifyLog({
-      accessToken: resolvedAuth.accessToken,
-      userId: resolvedAuth.userId,
-      imageUrl,
-      status: "error",
-      speciesCount,
-      candidateSpeciesSnapshot,
-      errorMessage: joinLogMessages(
-        "La clave de OpenAI no esta configurada en el servidor.",
-        uploadErrorMessage,
-      ),
-    });
-
-    return NextResponse.json(
-      { error: "La clave de OpenAI no esta configurada en el servidor." },
-      { status: 500 },
-    );
-  }
-
+  // Validate image presence and format before any further processing
   if (!imageDataUrl || !imageDataUrl.startsWith("data:image/")) {
-    logIdentifyDebug({
-      speciesCount,
-      speciesList: normalizedCandidates,
-      bestSuggestion: null,
-      uncertainReason: null,
-    });
-
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       status: "error",
@@ -580,18 +548,11 @@ export async function POST(request: Request) {
       candidateSpeciesSnapshot,
       errorMessage: "Debes enviar una imagen valida.",
     });
-    return NextResponse.json({ error: "Debes enviar una imagen valida." }, { status: 400 });
+    return NextResponse.json({ error: "Debes enviar una imagen valida.", logId: currentLogId }, { status: 400 });
   }
 
   if (bytesFromDataUrl(imageDataUrl) > MAX_IMAGE_BYTES) {
-    logIdentifyDebug({
-      speciesCount,
-      speciesList: normalizedCandidates,
-      bestSuggestion: null,
-      uncertainReason: null,
-    });
-
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       status: "error",
@@ -600,21 +561,48 @@ export async function POST(request: Request) {
       errorMessage: "La imagen es demasiado grande. Reduce resolucion o compresion antes de enviarla.",
     });
     return NextResponse.json(
-      {
-        error:
-          "La imagen es demasiado grande. Reduce resolucion o compresion antes de enviarla.",
-      },
+      { error: "La imagen es demasiado grande. Reduce resolucion o compresion antes de enviarla.", logId: currentLogId },
       { status: 413 },
     );
   }
 
+  // Upload image early so every subsequent log has image_url
   const uploadResult = await uploadIdentifyImage({
     imageDataUrl,
     accessToken: resolvedAuth.accessToken,
     userId: resolvedAuth.userId,
   });
   imageUrl = uploadResult.imageUrl;
-  uploadErrorMessage = uploadResult.errorMessage;
+  uploadError = uploadResult.errorMessage;
+  if (uploadError) {
+    console.warn("[identify] Image upload failed, continuing identification without stored image.", uploadError);
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    logIdentifyDebug({
+      speciesCount,
+      speciesList: normalizedCandidates,
+      bestSuggestion: null,
+      uncertainReason: null,
+    });
+
+    currentLogId = await writeIdentifyLog({
+      accessToken: resolvedAuth.accessToken,
+      userId: resolvedAuth.userId,
+      imageUrl,
+      status: "error",
+      speciesCount,
+      candidateSpeciesSnapshot,
+      errorMessage: "La clave de OpenAI no esta configurada en el servidor.",
+    });
+
+    return NextResponse.json(
+      { error: "La clave de OpenAI no esta configurada en el servidor.", logId: currentLogId },
+      { status: 500 },
+    );
+  }
 
   if (!Array.isArray(speciesList) || speciesList.length === 0) {
     logIdentifyDebug({
@@ -624,20 +612,17 @@ export async function POST(request: Request) {
       uncertainReason: null,
     });
 
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       imageUrl,
       status: "error",
       speciesCount,
       candidateSpeciesSnapshot,
-      errorMessage: joinLogMessages(
-        "Debes enviar al menos una especie candidata.",
-        uploadErrorMessage,
-      ),
+      errorMessage: "Debes enviar al menos una especie candidata.",
     });
     return NextResponse.json(
-      { error: "Debes enviar al menos una especie candidata." },
+      { error: "Debes enviar al menos una especie candidata.", logId: currentLogId, imageUrl },
       { status: 400 },
     );
   }
@@ -650,22 +635,21 @@ export async function POST(request: Request) {
       uncertainReason: null,
     });
 
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       imageUrl,
       status: "error",
       speciesCount,
       candidateSpeciesSnapshot,
-      errorMessage: joinLogMessages(
-        "Demasiadas especies en speciesList. Envia una lista reducida para mejorar coste y latencia.",
-        uploadErrorMessage,
-      ),
+      errorMessage: "Demasiadas especies en speciesList. Envia una lista reducida para mejorar coste y latencia.",
     });
     return NextResponse.json(
       {
         error:
           "Demasiadas especies en speciesList. Envia una lista reducida para mejorar coste y latencia.",
+        logId: currentLogId,
+        imageUrl,
       },
       { status: 400 },
     );
@@ -682,21 +666,18 @@ export async function POST(request: Request) {
       uncertainReason: null,
     });
 
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       imageUrl,
       status: "error",
       speciesCount,
       candidateSpeciesSnapshot,
-      errorMessage: joinLogMessages(
-        "Lista de especies candidatas vacia.",
-        uploadErrorMessage,
-      ),
+      errorMessage: "Lista de especies candidatas vacia.",
     });
 
     return NextResponse.json(
-      { error: "Lista de especies candidatas vacia." },
+      { error: "Lista de especies candidatas vacia.", logId: currentLogId, imageUrl },
       { status: 400 },
     );
   }
@@ -795,7 +776,7 @@ export async function POST(request: Request) {
         uncertainReason: "empty_model_suggestions",
       });
 
-      await writeIdentifyLog({
+      currentLogId = await writeIdentifyLog({
         accessToken: resolvedAuth.accessToken,
         userId: resolvedAuth.userId,
         imageUrl,
@@ -804,13 +785,13 @@ export async function POST(request: Request) {
         candidateSpeciesSnapshot,
         uncertainReason: "empty_model_suggestions",
         internalSuggestions: [],
-        errorMessage: uploadErrorMessage,
       });
 
       return NextResponse.json({
         status: "uncertain",
         suggestion: null,
         missingCandidate: null,
+        logId: currentLogId,
       } satisfies IdentifyResponse);
     }
 
@@ -837,9 +818,9 @@ export async function POST(request: Request) {
         speciesCount,
         candidateSpeciesSnapshot,
         modelRawResponse,
-        errorMessage: joinLogMessages("Respuesta invalida del modelo.", uploadErrorMessage),
+        errorMessage: "Respuesta invalida del modelo.",
       });
-      return NextResponse.json({ error: "Respuesta invalida del modelo." }, { status: 502 });
+      return NextResponse.json({ error: "Respuesta invalida del modelo.", logId: currentLogId }, { status: 502 });
     }
 
     const modelSuggestions = toValidSuggestions(parsed);
@@ -873,7 +854,7 @@ export async function POST(request: Request) {
         uncertainReason: "species_not_in_catalog",
       });
 
-      await writeIdentifyLog({
+      currentLogId = await writeIdentifyLog({
         accessToken: resolvedAuth.accessToken,
         userId: resolvedAuth.userId,
         imageUrl,
@@ -891,6 +872,8 @@ export async function POST(request: Request) {
         status: "missing_species",
         suggestion: null,
         missingCandidate,
+        logId: currentLogId,
+        imageUrl,
       } satisfies IdentifyResponse);
     }
 
@@ -913,7 +896,7 @@ export async function POST(request: Request) {
         uncertainReason,
       });
 
-      await writeIdentifyLog({
+      currentLogId = await writeIdentifyLog({
         accessToken: resolvedAuth.accessToken,
         userId: resolvedAuth.userId,
         imageUrl,
@@ -930,6 +913,8 @@ export async function POST(request: Request) {
         status: "uncertain",
         suggestion: null,
         missingCandidate: null,
+        logId: currentLogId,
+        imageUrl,
       } satisfies IdentifyResponse);
     }
 
@@ -941,7 +926,7 @@ export async function POST(request: Request) {
       uncertainReason: null,
     });
 
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       imageUrl,
@@ -957,6 +942,8 @@ export async function POST(request: Request) {
       status: "identified",
       suggestion: bestValidSuggestion,
       missingCandidate: null,
+      logId: currentLogId,
+      imageUrl,
     } satisfies IdentifyResponse);
   } catch {
     logIdentifyDebug({
@@ -966,7 +953,7 @@ export async function POST(request: Request) {
       uncertainReason: null,
     });
 
-    await writeIdentifyLog({
+    currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
       userId: resolvedAuth.userId,
       imageUrl,
@@ -977,7 +964,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { error: "Error al consultar OpenAI para identificar la imagen." },
+      { error: "Error al consultar OpenAI para identificar la imagen.", logId: currentLogId, imageUrl },
       { status: 500 },
     );
   }
