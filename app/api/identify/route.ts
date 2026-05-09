@@ -53,6 +53,15 @@ interface IdentifyBody {
   speciesList?: SpeciesCandidate[];
   imageDataUrl?: string;
   speciesCandidates?: SpeciesCandidate[];
+  debugSearch?: string;
+}
+
+interface ActiveSpeciesRow {
+  id: string;
+  common_name: string;
+  scientific_name: string;
+  category: string;
+  is_active: boolean;
 }
 
 const SYSTEM_PROMPT = `
@@ -116,9 +125,18 @@ Si no hay animal visible o el animal no está representado en el catálogo, devu
 `;
 
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
-const MAX_SPECIES_COUNT = 250;
+const MAX_SPECIES_COUNT = 1000;
 const CANDIDATE_SNAPSHOT_LIMIT = 25;
 const IDENTIFY_CONFIDENCE_THRESHOLD = 0.7;
+const VALID_SPECIES_CATEGORIES = new Set([
+  "mammal",
+  "bird",
+  "reptile",
+  "amphibian",
+  "insect",
+  "fish",
+  "other",
+]);
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
@@ -259,6 +277,11 @@ function logIdentifyDebug(input: {
       input.speciesList,
       "Babosa común",
       "Arion vulgaris",
+    ),
+    has_tiburon_ballena_rhincodon_typus: hasSpeciesCandidate(
+      input.speciesList,
+      "Tiburón ballena",
+      "Rhincodon typus",
     ),
     best_suggestion: input.bestSuggestion
       ? {
@@ -474,6 +497,7 @@ function toValidMissingCandidate(raw: unknown): MissingCandidate | null {
 async function parseRequestBody(request: Request): Promise<{
   imageDataUrl: string | null;
   speciesList: SpeciesCandidate[];
+  debugSearch: string | null;
 }> {
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -481,6 +505,7 @@ async function parseRequestBody(request: Request): Promise<{
     const formData = await request.formData();
     const imageFile = formData.get("image");
     const speciesRaw = formData.get("speciesList");
+    const debugSearchRaw = formData.get("debugSearch");
     let imageDataUrl: string | null = null;
 
     if (imageFile instanceof File) {
@@ -495,31 +520,94 @@ async function parseRequestBody(request: Request): Promise<{
       speciesList = JSON.parse(speciesRaw) as SpeciesCandidate[];
     }
 
-    return { imageDataUrl, speciesList };
+    return {
+      imageDataUrl,
+      speciesList,
+      debugSearch:
+        typeof debugSearchRaw === "string" && debugSearchRaw.trim().length > 0
+          ? debugSearchRaw.trim()
+          : null,
+    };
   }
 
   const body = (await request.json()) as IdentifyBody;
   const imageInput = body.image ?? body.imageDataUrl ?? null;
   const speciesList = body.speciesList ?? body.speciesCandidates ?? [];
+  const debugSearch =
+    typeof body.debugSearch === "string" && body.debugSearch.trim().length > 0
+      ? body.debugSearch.trim()
+      : null;
 
   return {
     imageDataUrl: typeof imageInput === "string" ? asDataUrl(imageInput) : null,
     speciesList,
+    debugSearch,
   };
+}
+
+async function loadActiveSpeciesCandidates(accessToken?: string): Promise<SpeciesCandidate[] | null> {
+  const supabase = createSupabaseRouteClient(accessToken);
+
+  if (!supabase) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("species")
+    .select("id, common_name, scientific_name, category, is_active")
+    .eq("is_active", true)
+    .order("common_name", { ascending: true });
+
+  if (error || !data) {
+    return null;
+  }
+
+  const validatedRows: ActiveSpeciesRow[] = data
+    .map((row) => ({
+      id: row.id ?? "",
+      common_name: row.common_name?.trim() ?? "",
+      scientific_name: row.scientific_name?.trim() ?? "",
+      category: row.category?.trim() ?? "",
+      is_active: Boolean(row.is_active),
+    }))
+    .filter(
+      (row) =>
+        row.id.length > 0 &&
+        row.is_active &&
+        row.common_name.length > 0 &&
+        row.scientific_name.length > 0 &&
+        VALID_SPECIES_CATEGORIES.has(row.category),
+    );
+
+  return validatedRows.map((row) => ({
+    common_name: row.common_name,
+    scientific_name: row.scientific_name,
+    category: row.category,
+  }));
 }
 
 export async function POST(request: Request) {
   const resolvedAuth = await resolveAuthenticatedUserId(getAccessTokenFromRequest(request));
   let imageDataUrl: string | null = null;
   let speciesList: SpeciesCandidate[] = [];
+  let debugSearch: string | null = null;
   let imageUrl: string | null = null;
   let uploadError: string | null = null;
   let currentLogId: string | null = null;
+  let catalogSource: "server" | "client" = "client";
 
   try {
     const parsed = await parseRequestBody(request);
     imageDataUrl = parsed.imageDataUrl;
     speciesList = parsed.speciesList;
+    debugSearch = parsed.debugSearch;
+
+    // Always try to use fresh active species from DB; fallback to client payload if unavailable.
+    const serverSpeciesList = await loadActiveSpeciesCandidates(resolvedAuth.accessToken);
+    if (serverSpeciesList && serverSpeciesList.length > 0) {
+      speciesList = serverSpeciesList;
+      catalogSource = "server";
+    }
   } catch {
     currentLogId = await writeIdentifyLog({
       accessToken: resolvedAuth.accessToken,
@@ -655,8 +743,33 @@ export async function POST(request: Request) {
     );
   }
   const sanitizedCandidates = normalizedCandidates.filter(
-    (candidate) => candidate.common_name.length > 0,
+    (candidate) =>
+      candidate.common_name.length > 0 &&
+      candidate.scientific_name.length > 0 &&
+      VALID_SPECIES_CATEGORIES.has(candidate.category),
   );
+
+  const scientificNames = sanitizedCandidates
+    .map((candidate) => candidate.scientific_name)
+    .filter((value) => value.length > 0);
+  const debugSearchNormalized = debugSearch ? normalize(debugSearch) : null;
+  const debugSearchMatch = debugSearchNormalized
+    ? sanitizedCandidates.some((candidate) => {
+        const commonName = normalize(candidate.common_name);
+        const scientificName = normalize(candidate.scientific_name);
+        return commonName.includes(debugSearchNormalized) || scientificName.includes(debugSearchNormalized);
+      })
+    : null;
+
+  // Temporary diagnostics to verify backend active catalog freshness.
+  console.log("AI identify catalog diagnostics", {
+    catalog_source: catalogSource,
+    active_species_count: sanitizedCandidates.length,
+    first_5_scientific_names: scientificNames.slice(0, 5),
+    last_5_scientific_names: scientificNames.slice(-5),
+    debug_search: debugSearch,
+    debug_search_match: debugSearchMatch,
+  });
 
   if (sanitizedCandidates.length === 0) {
     logIdentifyDebug({
@@ -843,7 +956,34 @@ export async function POST(request: Request) {
       : null;
 
     // Best suggestion from valid (in catalog) suggestions
-    const bestValidSuggestion = validSuggestions.length > 0 ? validSuggestions[0] : null;
+    const bestValidSuggestionFromModel = validSuggestions.length > 0 ? validSuggestions[0] : null;
+
+    // Recovery path: model marked as missing_candidate, but that species is actually in active catalog.
+    const recoveredCandidate =
+      !bestValidSuggestionFromModel && missingCandidate
+        ? sanitizedCandidates.find((candidate) => {
+            const commonMatches = normalize(candidate.common_name) === normalize(missingCandidate.common_name);
+            const scientificMatches =
+              Boolean(missingCandidate.scientific_name) &&
+              canonicalScientificName(candidate.scientific_name) ===
+                canonicalScientificName(missingCandidate.scientific_name ?? "");
+
+            return commonMatches || scientificMatches;
+          })
+        : null;
+
+    const recoveredSuggestion: IdentifySuggestion | null = recoveredCandidate
+      ? {
+          common_name: recoveredCandidate.common_name,
+          scientific_name: recoveredCandidate.scientific_name,
+          confidence: IDENTIFY_CONFIDENCE_THRESHOLD,
+        }
+      : null;
+
+    const bestValidSuggestion = bestValidSuggestionFromModel ?? recoveredSuggestion;
+    const internalSuggestionsForLog = recoveredSuggestion
+      ? [recoveredSuggestion, ...validSuggestions]
+      : validSuggestions;
 
     // Case 1: No valid suggestion in catalog, but model found a missing species
     if (!bestValidSuggestion && missingCandidate) {
@@ -865,7 +1005,7 @@ export async function POST(request: Request) {
         candidateSpeciesSnapshot,
         uncertainReason: "species_not_in_catalog",
         modelRawResponse,
-        internalSuggestions: validSuggestions,
+        internalSuggestions: internalSuggestionsForLog,
       });
 
       return NextResponse.json({
@@ -906,7 +1046,7 @@ export async function POST(request: Request) {
         candidateSpeciesSnapshot,
         uncertainReason,
         modelRawResponse,
-        internalSuggestions: validSuggestions,
+        internalSuggestions: internalSuggestionsForLog,
       });
 
       return NextResponse.json({
@@ -935,7 +1075,7 @@ export async function POST(request: Request) {
       speciesCount,
       candidateSpeciesSnapshot,
       modelRawResponse,
-      internalSuggestions: validSuggestions,
+      internalSuggestions: internalSuggestionsForLog,
     });
 
     return NextResponse.json({

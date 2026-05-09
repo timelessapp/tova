@@ -209,6 +209,16 @@ export default function CapturePage() {
     };
 
     loadSpecies();
+
+    // Reload species when user returns to the tab (e.g., if new species were added to Supabase)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadSpecies();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const selectedSpecies = useMemo(
@@ -361,6 +371,10 @@ export default function CapturePage() {
             scientific_name: species.scientific_name ?? "",
             category: species.category,
           })),
+          debugSearch:
+            typeof window !== "undefined"
+              ? new URLSearchParams(window.location.search).get("debugSearch")?.trim() || null
+              : null,
         }),
       });
 
