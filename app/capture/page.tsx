@@ -826,12 +826,29 @@ export default function CapturePage() {
               Resultat
             </p>
             <div className="mt-4 rounded-2xl border border-sand-dark bg-white px-4 py-4">
+              <div className="mb-3 rounded-lg border border-sand-dark bg-sand/30 px-3 py-3">
+                <p className="text-sm font-semibold text-forest-dark">
+                  {identificationResult.missingCandidate?.common_name}
+                </p>
+                {identificationResult.missingCandidate?.scientific_name && (
+                  <p className="mt-1 text-xs italic text-forest-soft">
+                    {identificationResult.missingCandidate.scientific_name}
+                  </p>
+                )}
+              </div>
+
               <p className="text-base font-medium text-forest-dark">
-                Parece una especie que todavía no tenemos en TOVA.
+                L'hemos reconocido, pero todavía no lo tenemos en TOVA.
               </p>
+
               <p className="mt-2 text-sm text-forest-soft">
-                Gracias por ayudarnos a mejorar la colección. La revisaremos para añadirla pronto.
+                Nos ayudas muchísimo. Revisaremos este animal y lo añadiremos a la colección en unos días.
               </p>
+
+              <p className="mt-3 text-xs text-forest-soft font-medium">
+                ¡Inténtalo de nuevo en 3-5 días! 📅
+              </p>
+
               <button
                 type="button"
                 onClick={handlePickAnotherPhoto}
