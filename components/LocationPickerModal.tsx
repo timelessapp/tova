@@ -33,6 +33,7 @@ export default function LocationPickerModal({
   const [country, setCountry] = useState("");
   const [usingCurrentLocation, setUsingCurrentLocation] = useState(false);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,22 +72,86 @@ export default function LocationPickerModal({
     );
   };
 
-  const handleSaveLocation = () => {
+  const geocodeManualLocation = async (queries: string[]): Promise<Coordinates | null> => {
+    for (const query of queries) {
+      if (!query.trim()) {
+        continue;
+      }
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`,
+          {
+            headers: {
+              Accept: "application/json",
+              "Accept-Language": "ca,es,en",
+            },
+          },
+        );
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const payload = (await response.json()) as Array<{ lat?: string; lon?: string }>;
+        const first = Array.isArray(payload) ? payload[0] : null;
+
+        if (!first?.lat || !first?.lon) {
+          continue;
+        }
+
+        const latitude = Number(first.lat);
+        const longitude = Number(first.lon);
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          continue;
+        }
+
+        return { latitude, longitude };
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
+  };
+
+  const handleSaveLocation = async () => {
     const trimmedPlace = place.trim();
     const trimmedCountry = country.trim();
 
     let locationName = "";
     let source: LocationSavePayload["source"] = "manual";
+    let coords = center;
 
-    if (trimmedPlace && trimmedCountry) {
-      locationName = `${trimmedPlace}, ${trimmedCountry}`;
+    if (trimmedPlace || trimmedCountry) {
+      const manualQuery = [trimmedPlace, trimmedCountry].filter(Boolean).join(", ");
+      const fallbackQueries = Array.from(
+        new Set(
+          [
+            manualQuery,
+            [trimmedCountry, trimmedPlace].filter(Boolean).join(", "),
+            trimmedPlace,
+            trimmedCountry,
+          ].filter((value) => value.trim().length > 0),
+        ),
+      );
+      locationName = manualQuery;
       source = "manual";
-    } else if (trimmedPlace) {
-      locationName = trimmedPlace;
-      source = "manual";
-    } else if (trimmedCountry) {
-      locationName = trimmedCountry;
-      source = "manual";
+
+      setGeocoding(true);
+      setLocationStatus("Buscant coordenades per a aquesta ubicació...");
+      const geocoded = await geocodeManualLocation(fallbackQueries);
+      setGeocoding(false);
+
+      if (!geocoded) {
+        setLocationStatus("No hem pogut trobar aquesta ubicació. Escriu un lloc més específic.");
+        return;
+      }
+
+      coords = geocoded;
+      setCenter(geocoded);
+      setLocationStatus("Ubicació trobada i aplicada.");
     } else if (usingCurrentLocation) {
       locationName = "Ubicació guardada";
       source = "current";
@@ -95,7 +160,7 @@ export default function LocationPickerModal({
     }
 
     onSave({
-      coords: center,
+      coords,
       locationName,
       source,
     });
@@ -162,6 +227,7 @@ export default function LocationPickerModal({
         <button
           type="button"
           onClick={handleUseCurrentLocation}
+          disabled={geocoding}
           className="mt-4 w-full rounded-full border border-sand-dark bg-white px-4 py-2.5 text-sm font-semibold text-forest"
         >
           Usar la meva ubicacio actual / Usar mi ubicacion actual
@@ -175,6 +241,7 @@ export default function LocationPickerModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={geocoding}
             className="rounded-full border border-sand-dark bg-white px-4 py-2.5 text-sm font-semibold text-forest"
           >
             Cancel lar / Cancelar
@@ -182,9 +249,10 @@ export default function LocationPickerModal({
           <button
             type="button"
             onClick={handleSaveLocation}
-            className="rounded-full bg-[#2F5D50] px-4 py-2.5 text-sm font-semibold text-[#F4F1E8]"
+            disabled={geocoding}
+            className="rounded-full bg-[#2F5D50] px-4 py-2.5 text-sm font-semibold text-[#F4F1E8] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Guardar ubicacio / Guardar ubicacion
+            {geocoding ? "Buscant ubicacio..." : "Guardar ubicacio / Guardar ubicacion"}
           </button>
         </div>
       </div>

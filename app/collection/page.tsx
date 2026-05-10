@@ -7,6 +7,7 @@ import { getLocalizedCommonName } from "@/lib/getLocalizedCommonName";
 import { getLocalizedSpeciesText } from "@/lib/getLocalizedSpeciesText";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
+import { t } from "@/lib/i18n";
 import type { Species, SpeciesCategory } from "@/lib/types";
 
 type SpeciesCard = Pick<
@@ -48,26 +49,10 @@ type CategoryOption = {
   value: CategoryFilter;
 };
 
-const categoryOptions: CategoryOption[] = [
-  { label: "Tots", value: "all" },
-  { label: "Mamífers", value: "mammal" },
-  { label: "Ocells", value: "bird" },
-  { label: "Rèptils", value: "reptile" },
-  { label: "Amfibis", value: "amphibian" },
-  { label: "Insectes", value: "insect" },
-  { label: "Peixos", value: "fish" },
-  { label: "Altres", value: "other" },
-];
+// Note: categoryOptions are now built dynamically in CollectionPage using t() to access translations
+type CategoryOptionStatic = CategoryOption; // For type reference only
 
-const categoryLabelMap: Record<SpeciesCategory, string> = {
-  mammal: "Mamífer",
-  bird: "Ocell",
-  reptile: "Rèptil",
-  amphibian: "Amfibi",
-  insect: "Insecte",
-  fish: "Peix",
-  other: "Altre",
-};
+// categoryLabelMap moved to dynamic generation in component using translations
 
 type CategoryStyle = {
   cardBorder: string;
@@ -165,6 +150,7 @@ export default function CollectionPage() {
   const UNDISCOVERED_PAGE_SIZE = 20;
   const { user, loading: authLoading } = useCurrentUser();
   const { language: profileLanguage } = useProfileLanguage();
+  const translations = t(profileLanguage);
   const [loading, setLoading] = useState(true);
   const [species, setSpecies] = useState<SpeciesCard[]>([]);
   const [discoveredSpeciesIds, setDiscoveredSpeciesIds] = useState<string[]>([]);
@@ -183,9 +169,7 @@ export default function CollectionPage() {
       const supabase = createSupabaseBrowserClient();
 
       if (!supabase) {
-        setMessage(
-          "No hem trobat la configuració de Supabase. Revisa NEXT_PUBLIC_SUPABASE_URL i NEXT_PUBLIC_SUPABASE_ANON_KEY.",
-        );
+        setMessage(translations.errors.supabaseConfig);
         setSpecies([]);
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
@@ -206,7 +190,7 @@ export default function CollectionPage() {
         .order("common_name", { ascending: true });
 
       if (speciesError) {
-        setMessage("Ara mateix no hem pogut carregar el catàleg.");
+        setMessage(translations.errors.catalogLoadFailed);
         setSpecies([]);
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
@@ -220,7 +204,7 @@ export default function CollectionPage() {
       setSpecies(loadedSpecies);
 
       if (loadedSpecies.length === 0) {
-        setMessage("Encara no hi ha espècies carregades al catàleg.");
+        setMessage(translations.errors.noCatalog);
       }
 
       if (!user) {
@@ -238,7 +222,7 @@ export default function CollectionPage() {
         .eq("user_id", user.id);
 
       if (sightingsError) {
-        setMessage("Ara mateix no hem pogut carregar els teus albiraments.");
+        setMessage(translations.errors.sightingsLoadFailed);
         setDiscoveredSpeciesIds([]);
         setRecentSpeciesIds([]);
         setLatestSightingBySpeciesId({});
@@ -409,14 +393,14 @@ export default function CollectionPage() {
     const category = (speciesItem.category as SpeciesCategory) ?? "other";
     const localizedText = getLocalizedSpeciesText(speciesItem, profileLanguage);
     const localizedCommonName = getLocalizedCommonName(speciesItem, profileLanguage);
-    const categoryLabel = categoryLabelMap[category] ?? "Otro";
+    const categoryLabel = translations.categoryLabels[category] ?? translations.categoryLabels.other;
     const categoryStyle = getCategoryStyle(category);
     const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
     const latestSighting = latestSightingBySpeciesId[speciesItem.id];
     const locationText = latestSighting?.location_name
       ? `📍 ${latestSighting.location_name}`
       : latestSighting?.latitude != null && latestSighting?.longitude != null
-        ? "📍 Ubicació desada"
+        ? translations.species.savedLocation
         : null;
 
     return (
@@ -446,7 +430,7 @@ export default function CollectionPage() {
         <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
           <h3 className="text-sm font-semibold text-forest-dark">{localizedCommonName}</h3>
           <p className="mt-1 text-xs italic text-[#5c6f64]">
-            {speciesItem.scientific_name ?? "Sense nom científic"}
+            {speciesItem.scientific_name ?? translations.species.noScientificName}
           </p>
           <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-forest-soft">
             {localizedText.description}
@@ -480,12 +464,12 @@ export default function CollectionPage() {
               >
                 TOVA
               </Link>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">La meva col·lecció</h1>
-              <p className="mt-1 text-sm text-forest">El teu àlbum de descobriments</p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-forest-dark">{translations.header.title}</h1>
+              <p className="mt-1 text-sm text-forest">{translations.header.subtitle}</p>
 
               <div className="mt-4">
                 <p className="text-sm font-medium text-forest-dark">
-                  Has descobert {discoveredCount} de {species.length} animals
+                  {translations.header.discovered.replace("{count}", String(discoveredCount)).replace("{total}", String(species.length))}
                 </p>
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#d9cfbb]">
                   <div
@@ -496,7 +480,7 @@ export default function CollectionPage() {
               </div>
 
               {!authLoading && !user ? (
-                <p className="mt-3 text-xs text-forest-soft">Entra per començar la teva col·lecció.</p>
+                <p className="mt-3 text-xs text-forest-soft">{translations.header.logIn}</p>
               ) : null}
             </div>
 
@@ -504,8 +488,8 @@ export default function CollectionPage() {
               <Link
                 href="/profile"
                 className="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#c5d4c7] bg-[#fcfaf5] text-xl text-forest shadow-sm transition hover:bg-sand"
-                aria-label="Anar al perfil"
-                title="Veure perfil"
+                aria-label={translations.buttons.goToProfile}
+                title={translations.buttons.viewProfile}
               >
                 {profileAvatarUrl ? (
                   <img
@@ -521,8 +505,8 @@ export default function CollectionPage() {
               <Link
                 href="/trophies"
                 className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#c5d4c7] bg-[#fcfaf5] text-xl text-forest shadow-sm transition hover:bg-sand"
-                aria-label="Anar als trofeus"
-                title="Veure trofeus"
+                aria-label={translations.buttons.goToTrophies}
+                title={translations.buttons.viewTrophies}
               >
                 🏆
               </Link>
@@ -534,19 +518,19 @@ export default function CollectionPage() {
 
         {loading ? (
           <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center sm:p-8">
-            <p className="text-sm text-forest-soft">Carregant col·lecció...</p>
+            <p className="text-sm text-forest-soft">{translations.loading}</p>
           </section>
         ) : null}
 
         {!loading && message ? (
           <section className="rounded-3xl border border-sand-dark bg-sand p-6 text-center sm:p-8">
-            <p className="text-base font-medium text-forest-dark">Catàleg no disponible</p>
+            <p className="text-base font-medium text-forest-dark">{translations.errors.catalogUnavailable}</p>
             <p className="mt-2 text-sm text-forest-soft">{message}</p>
             <Link
               href="/capture"
               className="mt-5 inline-flex rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-sand"
             >
-              Anar a la captura de prova
+              {translations.buttons.tryCapture}
             </Link>
           </section>
         ) : null}
@@ -561,14 +545,14 @@ export default function CollectionPage() {
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-                Filtres
+                {translations.filters}
               </h2>
               <div className="flex items-center gap-2">
                 <Link
                   href="/map"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sand-dark bg-white text-sm text-forest transition-colors hover:bg-sand-dark"
-                  aria-label="Veure records al mapa"
-                  title="Veure records al mapa"
+                  aria-label={translations.buttons.viewMapRecords}
+                  title={translations.buttons.viewMapRecords}
                 >
                   🗺️
                 </Link>
@@ -581,10 +565,10 @@ export default function CollectionPage() {
                       : "border-sand-dark bg-white text-forest hover:bg-sand-dark"
                   }`}
                 >
-                  <span>Filtres</span>
+                  <span>{translations.filters}</span>
                   {selectedCategory !== "all" && (
                     <span className="rounded-full bg-white/30 px-1.5 py-0.5 text-[10px]">
-                      {categoryOptions.find((o) => o.value === selectedCategory)?.label}
+                      {translations.categories[selectedCategory as keyof typeof translations.categories]}
                     </span>
                   )}
                 </button>
@@ -593,7 +577,8 @@ export default function CollectionPage() {
 
             {filtersOpen && (
               <div className="flex flex-wrap gap-2">
-                {categoryOptions.map((option) => {
+                {Object.entries(translations.categories).map(([key, label]) => {
+                  const option = { value: key as CategoryFilter, label };
                   const isActive = selectedCategory === option.value;
                   return (
                     <button
@@ -606,7 +591,7 @@ export default function CollectionPage() {
                           : "border-sand-dark bg-white text-forest hover:bg-sand-dark"
                       }`}
                     >
-                      {option.label}
+                      {label}
                     </button>
                   );
                 })}
@@ -618,7 +603,7 @@ export default function CollectionPage() {
         {filteredRecentSpecies.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-              Descobriments recents
+              {translations.sections.recentDiscoveries}
             </h2>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -630,7 +615,7 @@ export default function CollectionPage() {
         {filteredUnlockedCollectionSpecies.length > 0 ? (
           <section className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-              La teva col·lecció
+              {translations.sections.myCollection}
             </h2>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -641,14 +626,14 @@ export default function CollectionPage() {
 
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-forest-soft">
-            Per descobrir
+            {translations.sections.toDiscover}
           </h2>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleUndiscoveredSpecies.map((speciesItem) => {
               const cat = (speciesItem.category as SpeciesCategory) ?? "other";
               const localizedCommonName = getLocalizedCommonName(speciesItem, profileLanguage);
-              const categoryLabel = categoryLabelMap[cat] ?? "Altre";
+              const categoryLabel = translations.categoryLabels[cat] ?? translations.categoryLabels.other;
               const categoryStyle = getCategoryStyle(cat);
               const stickerNumber = speciesNumberById.get(speciesItem.id) ?? "#000";
               const lockedIcon = categoryLockedIcon[cat] ?? "❓";
@@ -657,7 +642,7 @@ export default function CollectionPage() {
                 <button
                   type="button"
                   key={speciesItem.id}
-                  onClick={() => setLockedMessage("Encara no has descobert aquest animal")}
+                  onClick={() => setLockedMessage(translations.locked)}
                   className={`flex min-h-[18rem] flex-col overflow-hidden rounded-lg border-2 bg-[#fbf8f2] text-left opacity-85 transition hover:-translate-y-0.5 hover:shadow-sm ${categoryStyle.cardBorder}`}
                 >
                   <div className="h-2 w-full" style={{ backgroundColor: categoryStyle.categoryColor }} />
@@ -672,7 +657,7 @@ export default function CollectionPage() {
                     <h3 className="text-sm font-semibold text-forest-dark">
                       {localizedCommonName}
                     </h3>
-                    <p className="mt-1 text-xs text-forest-soft">Per descobrir</p>
+                    <p className="mt-1 text-xs text-forest-soft">{translations.unlockedCard}</p>
                     <div className="mt-auto flex items-end justify-between gap-2 pt-3">
                       <span
                         className={`inline-flex w-fit rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${categoryStyle.badgeBg} ${categoryStyle.badgeText}`}
@@ -696,7 +681,7 @@ export default function CollectionPage() {
                 }
                 className="rounded-full border border-sand-dark bg-sand px-4 py-2 text-sm font-medium text-forest"
               >
-                Carregar 20 més
+                {translations.buttons.loadMore}
               </button>
             </div>
           ) : null}
@@ -704,7 +689,7 @@ export default function CollectionPage() {
 
         {!loading && !message && displayedTotal === 0 ? (
           <section className="rounded-2xl border border-sand-dark bg-sand p-4 text-center">
-            <p className="text-sm text-forest-soft">No hi ha espècies en aquesta categoria.</p>
+            <p className="text-sm text-forest-soft">{translations.errors.noCategorySpecies}</p>
           </section>
         ) : null}
 
@@ -714,7 +699,7 @@ export default function CollectionPage() {
         href="/capture"
         className="fixed bottom-5 left-1/2 z-20 w-[calc(100%-2.5rem)] max-w-md -translate-x-1/2 rounded-full bg-[#2F5D50] px-6 py-4 text-center text-sm font-semibold text-[#F4F1E8] shadow-[0_18px_34px_-18px_rgba(26,42,34,0.95)]"
       >
-        Descobrir un animal
+        {translations.buttons.discover}
       </Link>
 
     </main>
