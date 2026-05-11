@@ -16,6 +16,31 @@ function replaceWithJpgExtension(fileName: string): string {
   return `${fileName}.jpg`;
 }
 
+async function convertHeicViaCanvas(file: File, outputName: string): Promise<File | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    return new Promise<File | null>((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(null); return; }
+          resolve(new File([blob], outputName, { type: "image/jpeg", lastModified: Date.now() }));
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function convertImageFileForApp(file: File): Promise<File> {
   const shouldConvert = hasHeicLikeMimeType(file.type) || hasHeicLikeExtension(file.name);
 
@@ -23,23 +48,38 @@ export async function convertImageFileForApp(file: File): Promise<File> {
     return file;
   }
 
-  const module = await import("heic2any");
-  const heic2any = module.default;
+  const outputName = replaceWithJpgExtension(file.name);
 
-  const converted = await heic2any({
-    blob: file,
-    toType: "image/jpeg",
-    quality: 0.92,
-  });
+  // Primary: heic2any (funciona sense suport HEIC natiu al navegador)
+  try {
+    const module = await import("heic2any");
+    const heic2any = module.default;
 
-  const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+    const converted = await heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.92,
+    });
 
-  if (!(convertedBlob instanceof Blob)) {
-    throw new Error("No se pudo convertir el archivo HEIC/HEIF a JPEG.");
+    const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+
+    if (convertedBlob instanceof Blob) {
+      return new File([convertedBlob], outputName, {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      });
+    }
+  } catch {
+    // heic2any ha fallat — prova el fallback amb canvas
   }
 
-  return new File([convertedBlob], replaceWithJpgExtension(file.name), {
-    type: "image/jpeg",
-    lastModified: Date.now(),
-  });
+  // Fallback: canvas (funciona si el navegador té suport HEIC natiu: Windows 11 + codec HEVC, Safari)
+  const canvasResult = await convertHeicViaCanvas(file, outputName);
+  if (canvasResult) {
+    return canvasResult;
+  }
+
+  throw new Error(
+    "No s'ha pogut convertir el fitxer HEIC. Converteix la foto a JPEG o PNG abans de pujar-la.",
+  );
 }
