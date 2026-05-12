@@ -133,6 +133,72 @@ async function uploadSightingPhoto(
   }
 }
 
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      if (!result) {
+        reject(new Error("No s'ha pogut serialitzar la imatge."));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = () => reject(new Error("No s'ha pogut serialitzar la imatge."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function prepareIdentifyImageDataUrl(dataUrl: string): Promise<string> {
+  const originalBlob = await fetch(dataUrl).then((response) => response.blob());
+  const targetMaxBytes = 3_800_000;
+
+  if (originalBlob.size <= targetMaxBytes) {
+    return dataUrl;
+  }
+
+  const bitmap = await createImageBitmap(originalBlob);
+  const maxDimension = 1600;
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    bitmap.close();
+    return dataUrl;
+  }
+
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const qualities = [0.86, 0.78, 0.7, 0.62];
+
+  for (const quality of qualities) {
+    const recompressedBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob),
+        "image/jpeg",
+        quality,
+      );
+    });
+
+    if (!recompressedBlob) {
+      continue;
+    }
+
+    if (recompressedBlob.size <= targetMaxBytes || quality === qualities[qualities.length - 1]) {
+      return blobToDataUrl(recompressedBlob);
+    }
+  }
+
+  return dataUrl;
+}
+
 export default function CapturePage() {
   const DEFAULT_LOCATION_CENTER = { latitude: 40.4168, longitude: -3.7038 };
   const router = useRouter();
@@ -352,33 +418,57 @@ export default function CapturePage() {
     resetIdentification();
 
     try {
+      const preparedImageDataUrl = await prepareIdentifyImageDataUrl(photoDataUrl);
       const supabase = createSupabaseBrowserClient();
       const { data: sessionData } = supabase
         ? await supabase.auth.getSession()
         : { data: { session: null } };
       const accessToken = sessionData.session?.access_token ?? null;
 
-      const response = await fetch("/api/identify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({
-          image: photoDataUrl,
-          speciesList: speciesOptions.map((species) => ({
+      const identifyImageBlob = await fetch(preparedImageDataUrl).then((response) => response.blob());
+      const formData = new FormData();
+      formData.append(
+        "image",
+        new File([identifyImageBlob], photoName || "identify.jpg", {
+          type: identifyImageBlob.type || "image/jpeg",
+        }),
+      );
+      formData.append(
+        "speciesList",
+        JSON.stringify(
+          speciesOptions.map((species) => ({
             common_name: species.common_name,
             scientific_name: species.scientific_name ?? "",
             category: species.category,
           })),
-          debugSearch:
-            typeof window !== "undefined"
-              ? new URLSearchParams(window.location.search).get("debugSearch")?.trim() || null
-              : null,
-        }),
+        ),
+      );
+
+      const debugSearch =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("debugSearch")?.trim() || null
+          : null;
+      if (debugSearch) {
+        formData.append("debugSearch", debugSearch);
+      }
+
+      const response = await fetch("/api/identify", {
+        method: "POST",
+        headers: {
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: formData,
       });
 
-      const payload = (await response.json()) as IdentifyApiResponse;
+      const contentType = response.headers.get("content-type") ?? "";
+      const payload: IdentifyApiResponse = contentType.includes("application/json")
+        ? ((await response.json()) as IdentifyApiResponse)
+        : {
+            error:
+              response.status === 413
+                ? "La imatge és massa gran per identificar-la. Prova una foto més lleugera."
+                : "El servidor ha retornat una resposta no vàlida.",
+          };
 
       if (!response.ok) {
         setIdentifyMessage(payload.error ?? "Error en identificar la imatge.");
